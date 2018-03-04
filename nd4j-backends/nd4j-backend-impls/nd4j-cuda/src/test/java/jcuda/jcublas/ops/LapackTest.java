@@ -1,15 +1,29 @@
 package jcuda.jcublas.ops;
 
-import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.factory.Nd4jBackend;
+import org.nd4j.linalg.string.NDArrayStrings;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 
 /**
- * @author raver119@gmail.com
- * // why i'm set as the author here? that's not my code
+ * @author rcorbish
  */
-@Ignore
-public class LapackTest {
-/*
+@RunWith(Parameterized.class)
+public class LapackTest extends BaseNd4jTest {
+
     java.util.Random rng = new java.util.Random(1230) ;
+
+    public TestPCA(Nd4jBackend backend) {
+        super(backend);
+    }
 
     @Test
     public void testSgetrf1() throws Exception {
@@ -48,6 +62,7 @@ public class LapackTest {
         assertEquals(  3.20930f, arr.getFloat(8), 0.00001f);
     }
 
+    @Test
     public void testGetrf() throws Exception {
 	m = 150 ;
 	n = 100 ;
@@ -81,5 +96,93 @@ public class LapackTest {
             }
         }
     }
-    */
+
+
+    @Test
+    public void testSvdTallFortran() throws Exception {
+	testSvd( 5, 3, 'f' ) ;
+    }
+
+    @Test
+    public void testSvdTallC() throws Exception {
+	testSvd( 5, 3, 'c' ) ;
+    }
+
+
+    @Test
+    public void testSvdWideFortran() throws Exception {
+	testSvd( 3, 5, 'f' ) ;
+    }
+
+
+    @Test
+    public void testSvdWideC() throws Exception {
+	testSvd( 3, 5, 'c' ) ;
+    }
+
+
+    @Test
+    public void testEigsFortran() throws Exception {
+	testEv( 5, 'f' ) ;
+    }
+
+
+    @Test
+    public void testEigsC() throws Exception {
+	testEv( 5, 'c' ) ;
+    }
+
+
+	void testSvd( int M, int N, char matrixOrder ) {
+		INDArray A = Nd4j.rand( M, N, matrixOrder ) ;
+		INDArray Aorig = A.dup();
+		INDArray U = Nd4j.create( M, M, matrixOrder ) ;
+		INDArray S = Nd4j.create( N, matrixOrder ) ;
+		INDArray VT = Nd4j.create( N, N, matrixOrder ) ;
+				
+		Nd4j.getBlasWrapper().lapack().gesvd( A, S, U, VT ) ;
+		
+		INDArray SS = Nd4j.create( M, N ) ;
+		for( int i=0 ; i< Math.min(M, N) ; i++ ) {
+			SS.put( i,i, S.getDouble(i) ) ;
+		}
+		
+		INDArray AA = U.mmul( SS ).mmul( VT ) ;
+		for( int i=0 ; i<AA.length() ; i++ ) {
+			 assertEquals( "SVD did not factorize properly", AA.getDouble( i ), Aorig.getDouble(),  1e-5 ) ;
+		}
+	}
+
+	void testEv( int N, char matrixOrder ) {
+		INDArray A = Nd4j.rand( N, N, matrixOrder ) ;
+		for( int r=1 ; r<N ; r++ ) {
+			for( int c=0 ; c<r ; c++ ) {
+				double v = A.getDouble( r,c) ;
+				A.putScalar(c, r, v) ;
+			}
+		}
+		
+		INDArray Aorig = A.dup();
+		INDArray V = Nd4j.create( N ) ;
+				
+		Nd4j.getBlasWrapper().lapack().syev('V', 'U', A, V ) ;
+
+		INDArray VV = Nd4j.create( N, N ) ;
+		for( int i=0 ; i< N ; i++ ) {
+			VV.put( i,i, V.getDouble(i) ) ;
+		}
+
+		INDArray L = Aorig.mmul( A ) ;
+		INDArray R = A.mmul( VV ) ;
+
+		for( int i=0 ; i<L.length() ; i++ ) {
+			 assertEquals( "Eigen vectors are incorrect", L.getDouble( i ), R.getDouble(),  1e-5 ) ;
+		}
+	}
+
+    @Override
+    public char ordering() {
+        return 'f';
+    }
+
 }
