@@ -16,8 +16,8 @@ import static org.junit.Assert.assertTrue;
 /**
  * @author rcorbish
  */
-@RunWith(Parameterized.class)
-public class LapackTest extends BaseNd4jTest {
+@Ignore
+public class LapackTest {
 
     java.util.Random rng = new java.util.Random(1230) ;
 
@@ -132,7 +132,9 @@ public class LapackTest extends BaseNd4jTest {
 	testEv( 5, 'c' ) ;
     }
 
-
+	//
+	// Helper functions - not direct test cases
+	//
 	void testSvd( int M, int N, char matrixOrder ) {
 		INDArray A = Nd4j.rand( M, N, matrixOrder ) ;
 		INDArray Aorig = A.dup();
@@ -179,10 +181,5 @@ public class LapackTest extends BaseNd4jTest {
 			 assertEquals( "Eigen vectors are incorrect", L.getDouble( i ), R.getDouble(),  1e-5 ) ;
 		}
 	}
-
-    @Override
-    public char ordering() {
-        return 'f';
-    }
 
 }
