@@ -1,8 +1,8 @@
 package org.nd4j.imports.graphmapper.tf;
 
+import com.github.os72.protobuf351.Message;
 import com.google.common.primitives.Floats;
 import com.google.common.primitives.Ints;
-import com.google.protobuf.Message;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.nd4j.autodiff.functions.DifferentialFunction;
@@ -276,7 +276,7 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
     }
 
     @Override
-    public int[] getShapeFromAttr(AttrValue attr) {
+    public long[] getShapeFromAttr(AttrValue attr) {
         return shapeFromShapeProto(attr.getShape());
     }
 
@@ -317,7 +317,7 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
     }
 
     @Override
-    public int[] getShape(NodeDef nodeDef) {
+    public long[] getShape(NodeDef nodeDef) {
         return getShapeFromAttr(nodeDef.getAttrOrThrow(SHAPE_KEY));
     }
 
@@ -444,19 +444,19 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
 
         val diff = importState.getSameDiff();
         if (isVariableNode(tfNode)) {
-            List<Integer> dimensions = new ArrayList<>();
+            List<Long> dimensions = new ArrayList<>();
             Map<String, AttrValue> attributes = getAttrMap(tfNode);
             if (attributes.containsKey(VALUE_ATTR_KEY)) {
                 diff.var(getName(tfNode),getArrayFrom(tfNode,importState.getGraph()));
             }
             else if (attributes.containsKey(SHAPE_KEY)) {
                 AttrValue shape = attributes.get(SHAPE_KEY);
-                int[] shapeArr = getShapeFromAttr(shape);
+                long[] shapeArr = getShapeFromAttr(shape);
                 int dims = shapeArr.length;
                 if (dims > 0) {
                     // even vector is 2d in nd4j
                     if (dims == 1)
-                        dimensions.add(1);
+                        dimensions.add(1L);
 
                     for (int e = 0; e < dims; e++) {
                         // TODO: eventually we want long shapes :(
@@ -566,6 +566,11 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
         val tfProperties = properties.get(mappedTfName);
         val fields = DifferentialFunctionClassHolder.getInstance().getFieldsForFunction(on);
         val attributeAdapters = on.attributeAdaptersForFunction();
+
+        // if there's no properties announced for this function - just return
+        if (tfProperties == null)
+            return;
+
         for(val entry : tfProperties.entrySet()) {
             val tfAttrName = entry.getValue().getTfAttrName();
             val currentField = fields.get(entry.getKey());
@@ -707,6 +712,15 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
                         else if(currentField.getType().equals(INDArray.class)) {
                             on.setValueFor(currentField,tensor);
                         }
+                        else if(currentField.getType().equals(int.class)) {
+                            on.setValueFor(currentField,tensor.getInt(0));
+                        }
+                        else if(currentField.getType().equals(double.class)) {
+                            on.setValueFor(currentField,tensor.getDouble(0));
+                        }
+                        else if(currentField.getType().equals(float.class)) {
+                            on.setValueFor(currentField,tensor.getFloat(0));
+                        }
                     }
 
 
@@ -746,9 +760,9 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
     }
 
     @Override
-    public int[] getShapeFromAttribute(AttrValue attrValue) {
+    public long[] getShapeFromAttribute(AttrValue attrValue) {
         TensorShapeProto shape = attrValue.getShape();
-        int[] ret = new int[shape.getDimCount()];
+        long[] ret = new long[shape.getDimCount()];
         for(int i = 0; i < ret.length; i++) {
             ret[i] = (int) shape.getDim(i).getSize();
         }
@@ -948,8 +962,25 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
                 INDArray array = Nd4j.create(jArray, arrayShape, 0, 'c');
                 return array;
             } else if (tfTensor.getTensorContent().size() > 0){
-                // FIXME: INT bytebuffers should be converted to floating point
-                throw new UnsupportedOperationException("To be implemented yet");
+                //throw new UnsupportedOperationException("To be implemented yet");
+                //Mapping INT bytebuffers should be converted to floating point
+                val bb = tfTensor.getTensorContent().asReadOnlyByteBuffer();
+                val lb = bb.order(ByteOrder.nativeOrder()).asLongBuffer();
+                val fa = new float[lb.capacity()];
+                for (int e = 0; e < lb.capacity(); e++)
+                    fa[e] = (float) lb.get(e);
+                if (fa.length == 0)
+                    throw new ND4JIllegalStateException("Can't find Tensor values! Probably you've forgot to freeze graph before saving?");
+
+                if (fa.length == 1)
+                    return Nd4j.trueScalar(fa[0]);
+
+                if (arrayShape.length == 1)
+                    return Nd4j.trueVector(fa);
+                val array = Nd4j.create(fa, arrayShape, 'c', 0);
+                //log.debug("SUM1: {}", array.sumNumber());
+                //log.debug("Data: {}", Arrays.toString(array.data().asFloat()));
+                return array;
             }
         }  else {
             throw new UnsupportedOperationException("Unknown dataType found: [" + tfTensor.getDtype() + "]");
@@ -959,7 +990,7 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
     }
 
     @Override
-    public int[] getShapeFromTensor(NodeDef tensorProto) {
+    public long[] getShapeFromTensor(NodeDef tensorProto) {
         if(tensorProto.containsAttr("shape")) {
             return shapeFromShapeProto(tensorProto.getAttrOrThrow("shape").getShape());
 
@@ -989,18 +1020,18 @@ public class TFGraphMapper extends BaseGraphMapper<GraphDef,NodeDef,AttrValue,No
         return nodeDef.getInputCount();
     }
 
-    private int[] shapeFromShapeProto(TensorShapeProto tensorShapeProto) {
-        int[] shape = new int[tensorShapeProto.getDimList().size()];
+    private long[] shapeFromShapeProto(TensorShapeProto tensorShapeProto) {
+        long[] shape = new long[tensorShapeProto.getDimList().size()];
         for(int i = 0; i < shape.length; i++) {
-            shape[i] = (int) tensorShapeProto.getDim(i).getSize();
+            shape[i] =  tensorShapeProto.getDim(i).getSize();
         }
 
         //shape should be mapped to a row vector
         if(shape.length < 2) {
             if(shape.length == 1)
-                shape = new int[]{1,shape[0]};
+                shape = new long[]{1,shape[0]};
             else
-                shape = new int[]{1,1};
+                shape = new long[]{1,1};
         }
 
         return shape;

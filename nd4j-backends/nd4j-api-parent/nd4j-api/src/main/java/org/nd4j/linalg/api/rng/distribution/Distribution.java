@@ -193,7 +193,7 @@ public interface Distribution {
      * @return an array representing the random sample
      * @throws org.apache.commons.math3.exception.NotStrictlyPositiveException if {@code sampleSize} is not positive
      */
-    double[] sample(int sampleSize);
+    double[] sample(long sampleSize);
 
     /**
      * Sample the given shape
@@ -204,5 +204,15 @@ public interface Distribution {
      */
     INDArray sample(int[] shape);
 
+    INDArray sample(long[] shape);
+
+
+    /**
+     * Fill the target array by sampling from the distribution
+     *
+     * @param target  target array
+     * @return an ndarray with random samples from this distribution
+     */
+    INDArray sample(INDArray target);
 
 }

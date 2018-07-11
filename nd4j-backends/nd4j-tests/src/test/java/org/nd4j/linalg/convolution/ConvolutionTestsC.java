@@ -203,6 +203,8 @@ public class ConvolutionTestsC extends BaseNd4jTest {
         int[] padW = {0};
         Pooling2D.Pooling2DType[] types = new Pooling2D.Pooling2DType[]{Pooling2D.Pooling2DType.AVG, Pooling2D.Pooling2DType.PNORM, Pooling2D.Pooling2DType.MAX,};
 
+        int cnt = 0;
+
         for (Pooling2D.Pooling2DType type : types) {
             log.info("Trying pooling type: [{}]", type);
             for (int m : miniBatches) {
@@ -224,14 +226,18 @@ public class ConvolutionTestsC extends BaseNd4jTest {
                                             int padTop = pHTotal / 2;
                                             int padLeft = pWTotal / 2;
 
-                                            INDArray col = Nd4j.createUninitialized(new int[]{m, d, outSize[0], outSize[1], kh, kw}, 'c');
+                                            INDArray col = Nd4j.create(new int[]{m, d, outSize[0], outSize[1], kh, kw}, 'c');
                                             INDArray col2 = col.permute(0, 1, 4, 5, 2, 3);
+                                            //INDArray col = Nd4j.createUninitialized(new int[]{m, d, kh, kw, outSize[0], outSize[1]}, 'c');
+                                            //INDArray col2 = col;
 
                                             Convolution.im2col(in, kh, kw, sh, sw, padTop, padLeft, true, col2);
 
                                             INDArray col2d = col.reshape('c', m * d * outSize[0] * outSize[1], kh * kw);
 
-                                            INDArray output = Nd4j.create(m * d * outSize[0] * outSize[1]);
+                                            INDArray output = Nd4j.create(m, d, outSize[0], outSize[1]);
+
+
 
                                             INDArray reduced = null;
                                             switch (type) {
@@ -265,6 +271,7 @@ public class ConvolutionTestsC extends BaseNd4jTest {
                                                     break;
                                             }
 
+                                            reduced = reduced.reshape('c',m,d, outSize[0], outSize[1]);
 
                                             assertEquals("Failed opType: " + type, reduced, output);
                                         }
@@ -340,6 +347,7 @@ public class ConvolutionTestsC extends BaseNd4jTest {
 
 
     @Test
+    @Ignore
     public void testMaxPoolBackprop(){
         Nd4j.getRandom().setSeed(12345);
 
@@ -409,8 +417,10 @@ public class ConvolutionTestsC extends BaseNd4jTest {
 
         int outH = (int)Math.ceil(input.size(2)/(double)s[0]);
         int outW = (int)Math.ceil(input.size(3)/(double)s[1]);
-        int totalPadH = (outH-1)*s[0] + k[0] - input.size(2);
-        int totalPadW = (outW-1)*s[1] + k[1] - input.size(3);
+
+        // FIXME: int cast
+        int totalPadH = (outH-1)*s[0] + k[0] - (int) input.size(2);
+        int totalPadW = (outW-1)*s[1] + k[1] - (int) input.size(3);
 
         int topPad = totalPadH/2;
         int bottomPad = totalPadH - topPad;
@@ -463,8 +473,10 @@ public class ConvolutionTestsC extends BaseNd4jTest {
 
 
     protected static int[] getOutputSize(INDArray inputData, int[] kernel, int[] strides, int[] padding, boolean convolutionModeSame) {
-        int inH = inputData.size(2);
-        int inW = inputData.size(3);
+
+        //FIXME: int cast
+        int inH = (int) inputData.size(2);
+        int inW = (int) inputData.size(3);
 
         if (convolutionModeSame != true && (kernel[0] <= 0 || kernel[0] > inH + 2 * padding[0])) {
             throw new ND4JIllegalStateException();

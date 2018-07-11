@@ -125,6 +125,15 @@ public abstract class BaseTransformOp extends BaseOp implements TransformOp {
                            int[] shape,
                            boolean inPlace,
                            Object[] extraArgs) {
+        // FIXME: int cast !
+        this(sameDiff, i_v, ArrayUtil.toLongArray(shape), inPlace, extraArgs);
+    }
+
+    public BaseTransformOp(SameDiff sameDiff,
+                           SDVariable i_v,
+                           long[] shape,
+                           boolean inPlace,
+                           Object[] extraArgs) {
         super(sameDiff,inPlace,extraArgs);
 
         if (i_v != null) {
@@ -158,7 +167,6 @@ public abstract class BaseTransformOp extends BaseOp implements TransformOp {
 
     public BaseTransformOp(INDArray x, INDArray z) {
         super(x, z);
-        LinAlgExceptions.assertSameLength(x, z);
         LinAlgExceptions.assertSameShape(x, z);
     }
 
@@ -171,8 +179,9 @@ public abstract class BaseTransformOp extends BaseOp implements TransformOp {
     public BaseTransformOp(INDArray x, INDArray y, INDArray z, long n) {
         super(x, y, z, n);
         if (y != null)
-            LinAlgExceptions.assertSameLength(x, y);
-        LinAlgExceptions.assertSameLength(x, z);
+            LinAlgExceptions.assertSameLength(x, y, z);
+        else
+            LinAlgExceptions.assertSameLength(x, z);
 
     }
 
@@ -193,8 +202,8 @@ public abstract class BaseTransformOp extends BaseOp implements TransformOp {
 
 
     @Override
-    public List<int[]> calculateOutputShape() {
-        List<int[]> ret = new ArrayList<>(1);
+    public List<long[]> calculateOutputShape() {
+        List<long[]> ret = new ArrayList<>(1);
         if(arg() == null)
             throw new ND4JIllegalStateException("No arg found for op!");
 

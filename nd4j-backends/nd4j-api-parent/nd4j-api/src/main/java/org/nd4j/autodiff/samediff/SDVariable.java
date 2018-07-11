@@ -1,9 +1,9 @@
 package org.nd4j.autodiff.samediff;
 
-import com.google.common.base.Preconditions;
 import lombok.*;
 import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.Op;
@@ -51,7 +51,7 @@ public class SDVariable extends DifferentialFunction implements Serializable {
     @Builder
     private SDVariable(String varName,
                        SameDiff sameDiff,
-                       int[] shape,
+                       long[] shape,
                        WeightInitScheme weightInitScheme) {
         super(sameDiff,new Object[]{});
         this.varName = varName;
@@ -70,7 +70,7 @@ public class SDVariable extends DifferentialFunction implements Serializable {
             for(int i = 0; i < shape.length; i++) {
                 if(shape[i] < 0) {
                     sameDiff.addAsPlaceHolder(varName);
-                    sameDiff.setOriginalPlaceHolderShape(varName,shape);
+                    sameDiff.setOriginalPlaceHolderShape(varName, shape);
                     foundPlaceHolder = true;
                     break;
                 }
@@ -230,8 +230,8 @@ public class SDVariable extends DifferentialFunction implements Serializable {
      * Returns the shape of this variable
      * @return
      */
-    public int[] getShape() {
-        int[] initialShape =  sameDiff.getShapeForVarName(getVarName());
+    public long[] getShape() {
+        long[] initialShape =  sameDiff.getShapeForVarName(getVarName());
         if(initialShape == null) {
             val arr = getArr();
             if(arr != null)
@@ -291,6 +291,16 @@ public class SDVariable extends DifferentialFunction implements Serializable {
      */
     public SDVariable sub(double sameDiffVariable) {
         return sub(sameDiff.generateNewVarName(new SubOp().opName(),0),sameDiffVariable);
+
+    }
+
+    /**
+     *
+     * @param sameDiffVariable
+     * @return
+     */
+    public SDVariable squaredDifference(SDVariable sameDiffVariable) {
+        return squaredDifference(sameDiff.generateNewVarName(new SquaredDifferenceOp().opName(),0),sameDiffVariable);
 
     }
 
@@ -397,6 +407,16 @@ public class SDVariable extends DifferentialFunction implements Serializable {
      */
     public SDVariable rdiv(SDVariable sameDiffVariable) {
         return rdiv(sameDiff.generateNewVarName(new RDivOp().opName(),0),sameDiffVariable);
+
+    }
+
+    /**
+     *
+     * @param sameDiffVariable
+     * @return
+     */
+    public SDVariable truncatedDiv(SDVariable sameDiffVariable) {
+        return truncatedDiv(sameDiff.generateNewVarName(new TruncateDivOp().opName(),0),sameDiffVariable);
 
     }
 
@@ -519,6 +539,17 @@ public class SDVariable extends DifferentialFunction implements Serializable {
      */
     public SDVariable rdiv(String varName, double sameDiffVariable) {
         val function = sameDiff.f().rdiv(this,sameDiffVariable);
+        return sameDiff.updateVariableNameAndReference(function,varName);
+
+    }
+
+    /**
+     *
+     * @param sameDiffVariable
+     * @return
+     */
+    public SDVariable truncatedDiv(String varName, SDVariable sameDiffVariable) {
+        val function = sameDiff.f().truncatedDiv(this, sameDiffVariable);
         return sameDiff.updateVariableNameAndReference(function,varName);
 
     }
@@ -695,8 +726,22 @@ public class SDVariable extends DifferentialFunction implements Serializable {
     /**
      *
      * @param sameDiffVariable
-     * @return
+     * @return squared difference between variables
      */
+    public SDVariable squaredDifference(String varName, SDVariable sameDiffVariable) {
+        assertShapeEquals(sameDiffVariable);
+
+        SDVariable left = this;
+        SDVariable right = sameDiffVariable;
+        val result = sameDiff.f().squaredDifference(left, right);
+        return sameDiff.updateVariableNameAndReference(result, varName);
+    }
+
+        /**
+         *
+         * @param sameDiffVariable
+         * @return
+         */
     public SDVariable div(String varName, SDVariable sameDiffVariable) {
         assertShapeEquals(sameDiffVariable);
         val result = sameDiff.f().div(this,sameDiffVariable);
@@ -714,8 +759,8 @@ public class SDVariable extends DifferentialFunction implements Serializable {
 
         SDVariable left = this;
         SDVariable right = sameDiffVariable;
-        Preconditions.checkState(left != null,"Left input is null!");
-        Preconditions.checkState(right != null,"Right input is null!");
+        Preconditions.checkNotNull(left,"Left input is null!");
+        Preconditions.checkNotNull(right,"Right input is null!");
 
         val result = sameDiff.f().mul(left,right);
         return sameDiff.updateVariableNameAndReference(result,varName);

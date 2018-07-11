@@ -4,6 +4,7 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.val;
 import org.apache.commons.lang3.RandomUtils;
 import org.bytedeco.javacpp.Pointer;
 import org.nd4j.jita.allocator.Allocator;
@@ -34,10 +35,12 @@ import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.concurrency.AffinityManager;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.performance.PerformanceTracker;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.jcublas.buffer.BaseCudaDataBuffer;
 import org.nd4j.linalg.jcublas.context.CudaContext;
+import org.nd4j.linalg.memory.MemcpyDirection;
 import org.nd4j.nativeblas.NativeOps;
 import org.nd4j.nativeblas.NativeOpsHolder;
 import org.slf4j.Logger;
@@ -285,7 +288,17 @@ public class CudaZeroHandler implements MemoryHandler {
 
                             deviceAllocations.get(deviceId).put(point.getObjectId(), point.getObjectId());
 
-                            zeroAllocations.get(point.getBucketId()).remove(point.getObjectId());
+
+                            val p = point.getBucketId();
+
+                            if (p != null) {
+                                val m = zeroAllocations.get(point.getBucketId());
+
+                                // m can be null, if that's point from workspace - just no bucketId for it
+                                if (m != null)
+                                    m.remove(point.getObjectId());
+                            }
+
                             deviceMemoryTracker.addToAllocation(Thread.currentThread().getId(), deviceId, reqMemory);
 
                             //  point.tickDeviceWrite();
@@ -400,9 +413,7 @@ public class CudaZeroHandler implements MemoryHandler {
                 throw new IllegalStateException("devicePointer is NULL!");
             }
 
-            //log.info("Copying to device");
-            //  Random rnd = new Random();
-            //  if (rnd.nextInt(100) < 3) throw new RuntimeException("Relocate");
+            val profD = PerformanceTracker.getInstance().helperStartTransaction();
 
             if (nativeOps.memcpyAsync(point.getPointers().getDevicePointer(), point.getPointers().getHostPointer(),
                             AllocationUtils.getRequiredMemory(shape), CudaConstants.cudaMemcpyHostToDevice,
@@ -411,8 +422,8 @@ public class CudaZeroHandler implements MemoryHandler {
                                 + "] -> [" + point.getDevicePointer().address() + "]");
 
             flowController.commitTransfer(context.getSpecialStream());
-            //
-            //
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), profD, point.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
 
             //context.syncOldStream();
 
@@ -547,7 +558,12 @@ public class CudaZeroHandler implements MemoryHandler {
 
             //   log.info("JCPP Memcpy: [{}] -> [{}], length: [{}]", srcPointerJ.address(), dstPointer.address(), length);
 
+            val profD = PerformanceTracker.getInstance().helperStartTransaction();
+
             org.bytedeco.javacpp.Pointer.memcpy(dstPointer, srcPointerJ, length);
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), profD, point.getNumberOfBytes(), MemcpyDirection.HOST_TO_HOST);
+
 
             point.tickHostRead();
         } else {
@@ -555,12 +571,17 @@ public class CudaZeroHandler implements MemoryHandler {
 
             CudaContext context = flowController.prepareAction(point);
             tContext = context;
+
+            val prof = PerformanceTracker.getInstance().helperStartTransaction();
+
             if (nativeOps.memcpyAsync(dP, srcPointer, length, CudaConstants.cudaMemcpyHostToHost,
                             context.getSpecialStream()) == 0)
                 throw new IllegalStateException(
                                 "MemcpyAsync H2H failed: [" + srcPointer.address() + "] -> [" + dP.address() + "]");
 
             flowController.commitTransfer(tContext.getSpecialStream());
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), prof, point.getNumberOfBytes(),MemcpyDirection.HOST_TO_HOST);
 
             if (point.getAllocationStatus() == AllocationStatus.HOST)
                 flowController.registerAction(context, point);
@@ -575,12 +596,16 @@ public class CudaZeroHandler implements MemoryHandler {
                 tContext = flowController.prepareAction(point);
             //log.info("MemcpyAsync to device... [{}] -> [{}]", dP.getNativePointer(), rDP.getNativePointer());
 
+            val prof = PerformanceTracker.getInstance().helperStartTransaction();
+
             if (nativeOps.memcpyAsync(rDP, dP, length, CudaConstants.cudaMemcpyHostToDevice,
                             tContext.getSpecialStream()) == 0)
                 throw new IllegalStateException(
                                 "MemcpyAsync H2D failed: [" + dP.address() + "] -> [" + rDP.address() + "]");
 
             flowController.commitTransfer(tContext.getSpecialStream());
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), prof, point.getNumberOfBytes(),MemcpyDirection.HOST_TO_DEVICE);
 
             flowController.registerAction(tContext, point);
 
@@ -592,7 +617,6 @@ public class CudaZeroHandler implements MemoryHandler {
     @Override
     public void memcpyDevice(DataBuffer dstBuffer, Pointer srcPointer, long length, long dstOffset,
                     CudaContext context) {
-        //  log.info("Memcpy device: {} bytes ", length);
         AllocationPoint point = ((BaseCudaDataBuffer) dstBuffer).getAllocationPoint();
 
         Pointer dP = new CudaPointer((point.getPointers().getDevicePointer().address()) + dstOffset);
@@ -615,33 +639,35 @@ public class CudaZeroHandler implements MemoryHandler {
      */
     @Override
     public void memcpySpecial(DataBuffer dstBuffer, Pointer srcPointer, long length, long dstOffset) {
-        //   log.info("Memcpy special: {} bytes ", length);
         CudaContext context = getCudaContext();
         AllocationPoint point = ((BaseCudaDataBuffer) dstBuffer).getAllocationPoint();
 
-        //  context.syncOldStream();
-
         Pointer dP = new CudaPointer((point.getPointers().getHostPointer().address()) + dstOffset);
+
+        val profH = PerformanceTracker.getInstance().helperStartTransaction();
 
         if (nativeOps.memcpyAsync(dP, srcPointer, length, CudaConstants.cudaMemcpyHostToHost, context.getOldStream()) == 0)
             throw new ND4JIllegalStateException("memcpyAsync failed");
 
+        PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), profH, point.getNumberOfBytes(),MemcpyDirection.HOST_TO_HOST);
 
         if (point.getAllocationStatus() == AllocationStatus.DEVICE) {
             Pointer rDP = new CudaPointer(point.getPointers().getDevicePointer().address() + dstOffset);
+
+            val profD = PerformanceTracker.getInstance().helperStartTransaction();
 
             if (nativeOps.memcpyAsync(rDP, dP, length, CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0)
                 throw new ND4JIllegalStateException("memcpyAsync failed");
 
             context.syncOldStream();
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(point.getDeviceId(), profD, point.getNumberOfBytes(),MemcpyDirection.HOST_TO_DEVICE);
         }
 
         context.syncOldStream();
 
 
         point.tickDeviceWrite();
-        //       point.tickHostRead();
-
     }
 
 
@@ -678,60 +704,46 @@ public class CudaZeroHandler implements MemoryHandler {
         AllocationPoint dstPoint = ((BaseCudaDataBuffer) dstBuffer).getAllocationPoint();
         AllocationPoint srcPoint = ((BaseCudaDataBuffer) srcBuffer).getAllocationPoint();
 
-        Pointer dP = new CudaPointer(dstPoint.getPointers().getHostPointer().address());
+        Pointer dP = null; //new CudaPointer(dstPoint.getPointers().getHostPointer().address());
         Pointer sP = null;
+        MemcpyDirection direction = null;
 
-        if (srcPoint.getAllocationStatus() == AllocationStatus.DEVICE) {
-            sP = new CudaPointer(srcPoint.getPointers().getDevicePointer().address());
-            /*
-            JCuda.cudaMemcpyAsync(
-                    dP,
-                    sP,
-                    srcBuffer.length(),
-                    cudaMemcpyKind.cudaMemcpyHostToDevice,
-                    context.getOldStream()
-            );*/
+        val profDH = PerformanceTracker.getInstance().helperStartTransaction();
+
+
+
+        Nd4j.getExecutioner().push();
+
+        if (srcPoint.isActualOnDeviceSide()) {
+            sP = AtomicAllocator.getInstance().getPointer(srcBuffer, context);
+            dP = AtomicAllocator.getInstance().getPointer(dstBuffer, context);
+
             if (nativeOps.memcpyAsync(dP, sP, srcBuffer.length() * srcBuffer.getElementSize(),
-                            CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0) {
+                    CudaConstants.cudaMemcpyDeviceToDevice, context.getOldStream()) == 0) {
                 throw new ND4JIllegalStateException("memcpyAsync failed");
             }
+
+            dstPoint.tickDeviceWrite();
+            direction = MemcpyDirection.DEVICE_TO_DEVICE;
         } else {
-            sP = new CudaPointer(srcPoint.getPointers().getHostPointer().address());
-            /*
-            JCuda.cudaMemcpyAsync(
-                    dP,
-                    sP,
-                    srcBuffer.length(),
-                    cudaMemcpyKind.cudaMemcpyHostToDevice,
-                    context.getOldStream()
-            );*/
+            sP = AtomicAllocator.getInstance().getHostPointer(srcBuffer);
+            dP = AtomicAllocator.getInstance().getPointer(dstBuffer, context);
+
             if (nativeOps.memcpyAsync(dP, sP, srcBuffer.length() * srcBuffer.getElementSize(),
-                            CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0) {
+                    CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0) {
                 throw new ND4JIllegalStateException("memcpyAsync failed");
             }
-        }
 
-        if (dstPoint.getAllocationStatus() == AllocationStatus.DEVICE) {
-            Pointer rDP = new CudaPointer(dstPoint.getPointers().getDevicePointer().address());
-
-            /*
-            JCuda.cudaMemcpyAsync(
-                    rDP,
-                    dP,
-                    srcBuffer.length(),
-                    cudaMemcpyKind.cudaMemcpyHostToDevice,
-                    context.getOldStream()
-            );*/
-            if (nativeOps.memcpyAsync(rDP, dP, srcBuffer.length() * srcBuffer.getElementSize(),
-                            CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0) {
-                throw new ND4JIllegalStateException("memcpyAsync failed");
-            }
+            direction = MemcpyDirection.HOST_TO_DEVICE;
         }
 
         dstPoint.tickDeviceWrite();
 
         // it has to be blocking call
         context.syncOldStream();
+
+        PerformanceTracker.getInstance().helperRegisterTransaction(srcPoint.getDeviceId(), profDH / 2, dstPoint.getNumberOfBytes(), direction);
+//        PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profDH / 2, dstPoint.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
     }
 
     /**
@@ -813,6 +825,8 @@ public class CudaZeroHandler implements MemoryHandler {
                 return p.asIntPointer();
             case HALF:
                 return p.asShortPointer();
+            case LONG:
+                return p.asLongPointer();
             default:
                 return p;
         }
@@ -852,6 +866,8 @@ public class CudaZeroHandler implements MemoryHandler {
                 return p.asIntPointer();
             case HALF:
                 return p.asShortPointer();
+            case LONG:
+                return p.asLongPointer();
             default:
                 return p;
         }
@@ -889,11 +905,16 @@ public class CudaZeroHandler implements MemoryHandler {
                 alloc(AllocationStatus.DEVICE, dstPoint, dstPoint.getShape(), false);
 
                 CudaContext context = getCudaContext();
+
+                val profD = PerformanceTracker.getInstance().helperStartTransaction();
+
                 if (nativeOps.memcpyAsync(dstPoint.getDevicePointer(), dstPoint.getHostPointer(),
                         buffer.length() * buffer.getElementSize(), 1, context.getSpecialStream()) == 0)
                     throw new ND4JIllegalStateException("memcpyAsync failed");
 
                 context.syncSpecialStream();
+
+                PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profD / 2, dstPoint.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
 
                 // updating host pointer now
                 alloc(AllocationStatus.HOST, dstPoint, dstPoint.getShape(), false);
@@ -934,7 +955,7 @@ public class CudaZeroHandler implements MemoryHandler {
             // we replace original device pointer with new one
             alloc(AllocationStatus.DEVICE, dstPoint, dstPoint.getShape(), false);
 
-            //   log.info("Pointer after alloc: {}", dstPoint.getPointers().getDevicePointer().address());
+            val profD = PerformanceTracker.getInstance().helperStartTransaction();
 
             CudaContext context = getCudaContext();
             if (nativeOps.memcpyAsync(dstPoint.getDevicePointer(), dstPoint.getHostPointer(),
@@ -942,6 +963,8 @@ public class CudaZeroHandler implements MemoryHandler {
                 throw new ND4JIllegalStateException("memcpyAsync failed");
 
             context.syncSpecialStream();
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profD, dstPoint.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
 
             dstPoint.tickDeviceRead();
             dstPoint.tickHostRead();

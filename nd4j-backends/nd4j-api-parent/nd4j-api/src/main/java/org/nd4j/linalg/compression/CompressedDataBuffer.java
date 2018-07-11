@@ -3,6 +3,7 @@ package org.nd4j.linalg.compression;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
+import lombok.val;
 import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.indexer.Indexer;
@@ -10,7 +11,9 @@ import org.nd4j.linalg.api.buffer.BaseDataBuffer;
 import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.complex.IComplexDouble;
 import org.nd4j.linalg.api.complex.IComplexFloat;
+import org.nd4j.linalg.api.ops.performance.PerformanceTracker;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.memory.MemcpyDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,7 +87,7 @@ public class CompressedDataBuffer extends BaseDataBuffer {
         else {
             try {
 
-                // if buffer is compressed one, we''ll restore and decompress it here
+                // if buffer is compressed one, we''ll restore it here
                 String compressionAlgorithm = s.readUTF();
                 long compressedLength = s.readLong();
                 long originalLength = s.readLong();
@@ -95,17 +98,13 @@ public class CompressedDataBuffer extends BaseDataBuffer {
                     temp[i] = s.readByte();
                 }
 
-                try (Pointer pointer = new BytePointer(temp)) {
-                    CompressionDescriptor descriptor = new CompressionDescriptor();
-                    descriptor.setCompressedLength(compressedLength);
-                    descriptor.setCompressionAlgorithm(compressionAlgorithm);
-                    descriptor.setOriginalLength(originalLength);
-                    descriptor.setNumberOfElements(numberOfElements);
-
-                    CompressedDataBuffer compressedBuffer = new CompressedDataBuffer(pointer, descriptor);
-                    return Nd4j.getCompressor().decompress(compressedBuffer);
-                }
-
+                Pointer pointer = new BytePointer(temp);
+                CompressionDescriptor descriptor = new CompressionDescriptor();
+                descriptor.setCompressedLength(compressedLength);
+                descriptor.setCompressionAlgorithm(compressionAlgorithm);
+                descriptor.setOriginalLength(originalLength);
+                descriptor.setNumberOfElements(numberOfElements);
+                return new CompressedDataBuffer(pointer, descriptor);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -115,7 +114,13 @@ public class CompressedDataBuffer extends BaseDataBuffer {
     @Override
     public DataBuffer dup() {
         Pointer nPtr = new BytePointer(compressionDescriptor.getCompressedLength());
+
+        val perfD = PerformanceTracker.getInstance().helperStartTransaction();
+
         Pointer.memcpy(nPtr, pointer, compressionDescriptor.getCompressedLength());
+
+        PerformanceTracker.getInstance().helperRegisterTransaction(0, perfD, compressionDescriptor.getCompressedLength(), MemcpyDirection.HOST_TO_HOST);
+
         CompressionDescriptor nDesc = compressionDescriptor.clone();
 
         CompressedDataBuffer nBuf = new CompressedDataBuffer(nPtr, nDesc);

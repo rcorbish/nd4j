@@ -22,7 +22,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.nd4j</groupId>
     <artifactId>nd4j</artifactId>
-    <version>0.9.2-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
 
     <parent>
         <groupId>org.sonatype.oss</groupId>
@@ -47,6 +47,11 @@
 
 
     <profiles>
+        <!--
+        testresources profile must be running when executing tests. However, maven enforcer plugin seems to be unable
+         to enforce only when actually running tests - so we'll skip the enforcement (using profiles skipTestRun and skipTestCompileAndRun)
+         when -DskipTests or -Dmaven.test.skip=true is used
+         -->
         <profile>
             <id>testresources</id>
             <activation>
@@ -61,28 +66,52 @@
                 </dependency>
             </dependencies>
         </profile>
-      <profile>
-        <id>libnd4jhome-defined</id>
-        <activation>
-          <property>
-            <name>env.LIBND4J_HOME</name>
-          </property>
-        </activation>
-        <properties>
-          <libnd4jhome>${env.LIBND4J_HOME}</libnd4jhome>
-        </properties>
-      </profile>
-      <profile>
-        <id>libnd4jhome-undefined</id>
-        <activation>
-          <property>
-            <name>!env.LIBND4J_HOME</name>
-          </property>
-        </activation>
-        <properties>
-          <libnd4jhome>${basedir}/../../../../libnd4j/</libnd4jhome>
-        </properties>
-      </profile>
+        <profile>
+            <id>skipTestRun</id>
+            <activation>
+                <property>
+                    <name>skipTests</name>
+                </property>
+            </activation>
+            <properties>
+                <skipTestResourceEnforcement>true</skipTestResourceEnforcement>
+            </properties>
+        </profile>
+        <profile>
+            <id>skipTestCompileAndRun</id>
+            <activation>
+                <property>
+                    <name>maven.test.skip</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <properties>
+                <skipTestResourceEnforcement>true</skipTestResourceEnforcement>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>libnd4jhome-defined</id>
+            <activation>
+                <property>
+                    <name>env.LIBND4J_HOME</name>
+                </property>
+            </activation>
+            <properties>
+                <libnd4jhome>${env.LIBND4J_HOME}</libnd4jhome>
+            </properties>
+        </profile>
+        <profile>
+            <id>libnd4jhome-undefined</id>
+            <activation>
+                <property>
+                    <name>!env.LIBND4J_HOME</name>
+                </property>
+            </activation>
+            <properties>
+                <libnd4jhome>${basedir}/../../../../libnd4j/</libnd4jhome>
+            </properties>
+        </profile>
 
         <profile>
             <id>1.9build</id>
@@ -518,7 +547,6 @@
         <module>nd4j-shade</module>
         <module>nd4j-jdbc</module>
         <module>nd4j-instrumentation</module>
-        <module>nd4j-perf</module>
         <module>nd4j-serde</module>
         <module>nd4j-common</module>
         <module>nd4j-buffer</module>
@@ -529,12 +557,12 @@
     </modules>
 
     <properties>
-        <dl4j-test-resources.version>0.9.2-SNAPSHOT</dl4j-test-resources.version>
+        <dl4j-test-resources.version>1.0.0-SNAPSHOT</dl4j-test-resources.version>
         <maven.compiler.source>1.7</maven.compiler.source>
         <maven.compiler.target>1.7</maven.compiler.target>
         <commons-io.version>2.4</commons-io.version>
         <commons-math3.version>3.4.1</commons-math3.version>
-        <commons-lang3.version>3.3.1</commons-lang3.version>
+        <commons-lang3.version>3.4</commons-lang3.version>
         <commons-collections4.version>4.1</commons-collections4.version>
         <commons-compress.version>1.16.1</commons-compress.version>
         <camel.version>2.18.2</camel.version>
@@ -543,19 +571,20 @@
         <jcommander.version>1.27</jcommander.version>
         <guava.version>20.0</guava.version>
         <playframework.version>2.4.6</playframework.version>
-        <lombok.version>1.16.18</lombok.version>
+        <lombok.version>1.16.20</lombok.version>
         <jackson.version>2.5.1</jackson.version>
         <reflections.version>0.9.10</reflections.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>4.12</junit.version>
-        <slf4j.version>1.7.10</slf4j.version>
+        <slf4j.version>1.7.12</slf4j.version>
         <logback.version>1.1.2</logback.version>
-        <javacpp.version>1.4.1-SNAPSHOT</javacpp.version>
-        <javacpp-presets.version>1.4</javacpp-presets.version>
-        <process-classes.skip> false</process-classes.skip>  <!-- To skip native compilation phase: -Dprocess-classes.skip=true    -->
+        <javacpp.version>1.4.1</javacpp.version>
+        <javacpp-presets.version>1.4.1</javacpp-presets.version>
+        <javacpp.compiler.skip>false</javacpp.compiler.skip>  <!-- To skip native compilation phase: -Djavacpp.compiler.skip=true    -->
         <javacpp.platform>${os.name}-${os.arch}</javacpp.platform> <!-- For Android: -Dplatform=android-arm                                        -->
         <javacpp.platform.root />            <!--              -Dplatform.root=/path/to/android-ndk/                         -->
         <javacpp.platform.compiler />    <!--              -Dplatform.compiler=/path/to/arm-linux-androideabi-g++        -->
+        <javacpp.platform.sysroot />         <!--              -Djavacpp.platform.sysroot=$(xcrun -sdk iphoneos -show-sdk-path) -->
         <javacpp.platform.extension />
         <spark.version>1.6.3</spark.version>
         <maven-resources-plugin.version>3.0.1</maven-resources-plugin.version>
@@ -572,6 +601,9 @@
         <maven-compiler-plugin.version>3.7.0</maven-compiler-plugin.version>
         <maven-git-commit-id-plugin.version>2.2.2</maven-git-commit-id-plugin.version>
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
+        <maven-enforcer-plugin.version>1.4.1</maven-enforcer-plugin.version>
+        <fbs.version>1.2.0-3f79e055</fbs.version>
+        <skipTestResourceEnforcement>false</skipTestResourceEnforcement> <!-- Test resource profile must be enabled unless using -DskipTests etc -->
     </properties>
 
     <developers>
@@ -732,7 +764,6 @@
                   <directory>nd4j-shade</directory>
                   <directory>nd4j-jdbc</directory>
                   <directory>nd4j-instrumentation</directory>
-                  <directory>nd4j-perf</directory>
                   <directory>nd4j-serde</directory>
                   <directory>nd4j-common</directory>
                   <directory>nd4j-buffer</directory>
@@ -743,6 +774,30 @@
                   <directory>nd4j-backends/nd4j-tests</directory>
                 </directories>
               </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>test</phase>
+                        <id>enforce-test-resources</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skipTestResourceEnforcement}</skip>
+                            <rules>
+                                <requireActiveProfile>
+                                    <profiles>testresources</profiles>
+                                </requireActiveProfile>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
 
@@ -883,6 +938,22 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <dependencies>
+        <!-- used to alleviate licensing issues with findbugs -->
+        <dependency>
+            <groupId>com.github.stephenc.findbugs</groupId>
+            <artifactId>findbugs-annotations</artifactId>
+            <version>1.3.9-1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 
     <reporting>
       <plugins>

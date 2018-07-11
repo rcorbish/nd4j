@@ -513,7 +513,11 @@ public abstract class DifferentialFunction {
             SDVariable grad = var.getGradient();
             if(grad != null) {
                 SDVariable gradVar =  f().add(grad, vals.get(i));
-                vals.set(i, gradVar);
+                try {
+                    vals.set(i, gradVar);
+                } catch (UnsupportedOperationException e){
+                    throw new UnsupportedOperationException("Use a mutable list when returning values from "+this.getClass().getSimpleName()+".doDiff (e.g. Arrays.asList instead of Collections.singletonList)", e);
+                }
                 sameDiff.setGradientForVariableName(var.getVarName(), gradVar);
             } else {
                 SDVariable gradVar = vals.get(i);
@@ -669,7 +673,7 @@ public abstract class DifferentialFunction {
      * the output shape for this op
      * @return
      */
-    public List<int[]> calculateOutputShape() {
+    public List<long[]> calculateOutputShape() {
         throw new UnsupportedOperationException();
     }
 

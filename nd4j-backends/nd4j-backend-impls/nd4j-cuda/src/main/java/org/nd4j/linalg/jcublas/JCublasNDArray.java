@@ -32,9 +32,12 @@ import org.nd4j.linalg.api.ndarray.BaseNDArray;
 import org.nd4j.linalg.api.ndarray.BaseNDArrayProxy;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.GridExecutioner;
+import org.nd4j.linalg.api.ops.performance.PerformanceTracker;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.jcublas.context.CudaContext;
+import org.nd4j.linalg.memory.MemcpyDirection;
+import org.nd4j.linalg.workspace.WorkspaceUtils;
 import org.nd4j.nativeblas.NativeOpsHolder;
 
 import java.util.List;
@@ -110,6 +113,10 @@ public class JCublasNDArray extends BaseNDArray {
         super(shape, stride, offset, ordering, initialize);
     }
 
+    public JCublasNDArray(long[] shape, long[] stride, long offset, char ordering, boolean initialize) {
+        super(shape, stride, offset, ordering, initialize);
+    }
+
     /**
      * Create the JCublasNDArray with
      * the specified shape and stride and an offset of 0
@@ -125,15 +132,19 @@ public class JCublasNDArray extends BaseNDArray {
     }
 
     public JCublasNDArray(int[] shape, long offset, char ordering) {
-
         super(shape, offset, ordering);
+    }
 
+    public JCublasNDArray(long[] shape, long offset, char ordering) {
+        super(shape, offset, ordering);
     }
 
     public JCublasNDArray(int[] shape) {
-
         super(shape);
+    }
 
+    public JCublasNDArray(long[] shape) {
+        super(shape);
     }
 
     /**
@@ -159,9 +170,11 @@ public class JCublasNDArray extends BaseNDArray {
      * @param ordering
      */
     public JCublasNDArray(List<INDArray> slices, int[] shape, char ordering) {
-
         super(slices, shape, ordering);
+    }
 
+    public JCublasNDArray(List<INDArray> slices, long[] shape, char ordering) {
+        super(slices, shape, ordering);
     }
 
     /**
@@ -187,7 +200,14 @@ public class JCublasNDArray extends BaseNDArray {
 
     public JCublasNDArray(float[] data, int[] shape, int[] stride, long offset, char ordering) {
         super(data, shape, stride, offset, ordering);
+    }
 
+    public JCublasNDArray(float[] data, long[] shape, long[] stride, long offset, char ordering) {
+        super(data, shape, stride, offset, ordering);
+    }
+
+    public JCublasNDArray(double[] data, long[] shape, long[] stride, long offset, char ordering) {
+        super(data, shape, stride, offset, ordering);
     }
 
     public JCublasNDArray(DataBuffer data, int[] shape, int[] stride, long offset) {
@@ -199,6 +219,10 @@ public class JCublasNDArray extends BaseNDArray {
     }
 
     public JCublasNDArray(DataBuffer data, int[] shape) {
+        super(data, shape);
+    }
+
+    public JCublasNDArray(DataBuffer data, long[] shape) {
         super(data, shape);
     }
 
@@ -277,6 +301,10 @@ public class JCublasNDArray extends BaseNDArray {
         super(slices, shape);
     }
 
+    public JCublasNDArray(List<INDArray> slices, long[] shape) {
+        super(slices, shape);
+    }
+
     /**
      * Create an JCublasNDArray from the specified slices.
      * This will go through and merge all of the
@@ -307,7 +335,7 @@ public class JCublasNDArray extends BaseNDArray {
 
 
     public JCublasNDArray(JCublasNDArray doubleMatrix) {
-        this(new int[] {doubleMatrix.rows(), doubleMatrix.columns()});
+        this(new long[] {doubleMatrix.rows(), doubleMatrix.columns()});
         this.data = dup().data();
     }
 
@@ -337,6 +365,10 @@ public class JCublasNDArray extends BaseNDArray {
         super(buffer, shape, stride, offset, ordering);
     }
 
+    public JCublasNDArray(DataBuffer buffer, long[] shape, long[] stride, long offset, char ordering) {
+        super(buffer, shape, stride, offset, ordering);
+    }
+
     public JCublasNDArray(float[] data, char order) {
         super(data, order);
     }
@@ -350,6 +382,14 @@ public class JCublasNDArray extends BaseNDArray {
     }
 
     public JCublasNDArray(double[] data, int[] shape, char ordering) {
+        super(data, shape, ordering);
+    }
+
+    public JCublasNDArray(double[] data, long[] shape, char ordering) {
+        super(data, shape, ordering);
+    }
+
+    public JCublasNDArray(float[] data, long[] shape, char ordering) {
         super(data, shape, ordering);
     }
 
@@ -466,7 +506,7 @@ public class JCublasNDArray extends BaseNDArray {
      */
     public void setShapeInfoDataBuffer(DataBuffer buffer) {
         this.shapeInformation = buffer;
-        this.javaShapeInformation = shapeInformation.asInt();
+        this.javaShapeInformation = shapeInformation.asLong();
     }
 
     private Object writeReplace() throws java.io.ObjectStreamException {
@@ -494,6 +534,7 @@ public class JCublasNDArray extends BaseNDArray {
 
     @Override
     public INDArray unsafeDuplication(boolean blocking) {
+        WorkspaceUtils.assertValidArray(this, "Cannot duplicate array");
         DataBuffer rb = Nd4j.getMemoryManager().getCurrentWorkspace() == null ? Nd4j.getDataBufferFactory().createSame(this.data, false) : Nd4j.getDataBufferFactory().createSame(this.data, false, Nd4j.getMemoryManager().getCurrentWorkspace());
 
         INDArray ret = Nd4j.createArrayFromShapeBuffer(rb, this.shapeInfoDataBuffer());
@@ -513,20 +554,25 @@ public class JCublasNDArray extends BaseNDArray {
 
         int route = 0;
 //        long time1 = System.currentTimeMillis();
+        MemcpyDirection direction = MemcpyDirection.HOST_TO_HOST;
+        val prof = PerformanceTracker.getInstance().helperStartTransaction();
 
         if (dstPoint.getAllocationStatus() == AllocationStatus.DEVICE && srcPoint.getAllocationStatus() == AllocationStatus.DEVICE) {
             // d2d copy
             route = 1;
             NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(dstPoint.getDevicePointer(), srcPoint.getDevicePointer(), this.data.length() * this.data.getElementSize(), CudaConstants.cudaMemcpyDeviceToDevice, blocking ? context.getOldStream() : context.getSpecialStream());
             dstPoint.tickDeviceWrite();
+            direction = MemcpyDirection.DEVICE_TO_DEVICE;
         } else if (dstPoint.getAllocationStatus() == AllocationStatus.HOST && srcPoint.getAllocationStatus() == AllocationStatus.DEVICE) {
             route = 2;
             NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(dstPoint.getHostPointer(), srcPoint.getDevicePointer(), this.data.length() * this.data.getElementSize(), CudaConstants.cudaMemcpyDeviceToHost, blocking ? context.getOldStream() : context.getSpecialStream());
             dstPoint.tickHostWrite();
+            direction = MemcpyDirection.DEVICE_TO_HOST;
         } else if (dstPoint.getAllocationStatus() == AllocationStatus.DEVICE && srcPoint.getAllocationStatus() == AllocationStatus.HOST) {
             route = 3;
             NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(dstPoint.getDevicePointer(), srcPoint.getHostPointer(), this.data.length() * this.data.getElementSize(), CudaConstants.cudaMemcpyHostToDevice, blocking ? context.getOldStream() : context.getSpecialStream());
             dstPoint.tickDeviceWrite();
+            direction = MemcpyDirection.HOST_TO_DEVICE;
         } else {
             route = 4;
             NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(dstPoint.getHostPointer(), srcPoint.getHostPointer(), this.data.length() * this.data.getElementSize(), CudaConstants.cudaMemcpyHostToHost, blocking ? context.getOldStream() : context.getSpecialStream());
@@ -540,6 +586,8 @@ public class JCublasNDArray extends BaseNDArray {
             context.syncOldStream();
         else
             context.syncSpecialStream();
+
+        PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), prof, dstPoint.getNumberOfBytes(), direction);
 
 //        AtomicAllocator.getInstance().synchronizeHostData(ret);
 /*
@@ -566,6 +614,8 @@ public class JCublasNDArray extends BaseNDArray {
 //            log.info("Skipping non-existent");
             return this;
         }
+
+        WorkspaceUtils.assertValidArray(this, "Cannot leverage INDArray to new workspace");
 
         MemoryWorkspace current = Nd4j.getMemoryManager().getCurrentWorkspace();
 
@@ -607,15 +657,23 @@ public class JCublasNDArray extends BaseNDArray {
 
             context.syncOldStream();
 */
+
+            MemcpyDirection direction = MemcpyDirection.DEVICE_TO_DEVICE;
+            val perfD = PerformanceTracker.getInstance().helperStartTransaction();
+
             if (pointSrc.isActualOnDeviceSide()) {
                 if (NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(pointDst.getDevicePointer(), pointSrc.getDevicePointer(), this.lengthLong() * Nd4j.sizeOfDataType(buffer.dataType()), CudaConstants.cudaMemcpyDeviceToDevice, context.getOldStream()) == 0)
                     throw new ND4JIllegalStateException("memcpyAsync failed");
             } else {
                 if (NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(pointDst.getDevicePointer(), pointSrc.getHostPointer(), this.lengthLong() * Nd4j.sizeOfDataType(buffer.dataType()), CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0)
                     throw new ND4JIllegalStateException("memcpyAsync failed");
+
+                direction = MemcpyDirection.HOST_TO_DEVICE;
             }
 
             context.syncOldStream();
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(pointDst.getDeviceId(), perfD, pointSrc.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
 
             copy = Nd4j.createArrayFromShapeBuffer(buffer, this.shapeInfoDataBuffer());
 
@@ -645,6 +703,7 @@ public class JCublasNDArray extends BaseNDArray {
      */
     @Override
     public INDArray migrate() {
+        WorkspaceUtils.assertValidArray(this, "Cannot leverage INDArray to new workspace");
         MemoryWorkspace current = Nd4j.getMemoryManager().getCurrentWorkspace();
 
         if (current == null)
@@ -663,15 +722,23 @@ public class JCublasNDArray extends BaseNDArray {
 //            CudaContext context = (CudaContext) AtomicAllocator.getInstance().getDeviceContext().getContext();
 
             CudaContext context = AtomicAllocator.getInstance().getFlowController().prepareAction(pointDst, pointSrc);
+
+            MemcpyDirection direction = MemcpyDirection.DEVICE_TO_DEVICE;
+            val perfD = PerformanceTracker.getInstance().helperStartTransaction();
+
             if (pointSrc.isActualOnDeviceSide()) {
                 if (NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(pointDst.getDevicePointer(), pointSrc.getDevicePointer(), this.lengthLong() * Nd4j.sizeOfDataType(buffer.dataType()), CudaConstants.cudaMemcpyDeviceToDevice, context.getOldStream()) == 0)
                     throw new ND4JIllegalStateException("memcpyAsync failed");
             } else {
                 if (NativeOpsHolder.getInstance().getDeviceNativeOps().memcpyAsync(pointDst.getDevicePointer(), pointSrc.getHostPointer(), this.lengthLong() * Nd4j.sizeOfDataType(buffer.dataType()), CudaConstants.cudaMemcpyHostToDevice, context.getOldStream()) == 0)
                     throw new ND4JIllegalStateException("memcpyAsync failed");
+
+                direction = MemcpyDirection.HOST_TO_DEVICE;
             }
 
             context.syncOldStream();
+
+            PerformanceTracker.getInstance().helperRegisterTransaction(pointDst.getDeviceId(), perfD, pointDst.getNumberOfBytes(), direction);
 
             if (pointDst.getDeviceId() != Nd4j.getMemoryManager().getCurrentWorkspace().getDeviceId()) {
                 //log.info("Swapping [{}] -> [{}]", pointDst.getDeviceId(), Nd4j.getMemoryManager().getCurrentWorkspace().getDeviceId());
@@ -699,7 +766,7 @@ public class JCublasNDArray extends BaseNDArray {
             return this;
 
         val factory = Nd4j.getNDArrayFactory();
-        val buffer = Nd4j.createBuffer(new int[]{this.length()}, DataBuffer.Type.FLOAT);
+        val buffer = Nd4j.createBuffer(new long[]{this.length()}, DataBuffer.Type.FLOAT);
 
         factory.convertDataEx(convertType(data.dataType()), AtomicAllocator.getInstance().getHostPointer(this.data()), DataBuffer.TypeEx.FLOAT, AtomicAllocator.getInstance().getHostPointer(buffer), buffer.length());
 
@@ -714,7 +781,7 @@ public class JCublasNDArray extends BaseNDArray {
             return this;
 
         val factory = Nd4j.getNDArrayFactory();
-        val buffer = Nd4j.createBuffer(new int[]{this.length()}, DataBuffer.Type.DOUBLE);
+        val buffer = Nd4j.createBuffer(new long[]{this.length()}, DataBuffer.Type.DOUBLE);
 
         factory.convertDataEx(convertType(data.dataType()), AtomicAllocator.getInstance().getHostPointer(this.data()), DataBuffer.TypeEx.DOUBLE, AtomicAllocator.getInstance().getHostPointer(buffer), buffer.length());
 
@@ -722,5 +789,6 @@ public class JCublasNDArray extends BaseNDArray {
 
         return Nd4j.createArrayFromShapeBuffer(buffer, this.shapeInformation);
     }
+
 
 }

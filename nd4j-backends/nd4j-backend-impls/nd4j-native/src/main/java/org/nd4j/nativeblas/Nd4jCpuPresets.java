@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Scanner;
 
 /**
@@ -81,6 +82,7 @@ import java.util.Scanner;
                                               "ops/declarable/headers/random.h",
                                               "ops/declarable/headers/nn.h",
                                               "ops/declarable/headers/blas.h",
+                                              "ops/declarable/headers/tests.h",
                                               "ops/declarable/headers/bitwise.h",
                                               "ops/declarable/headers/loss.h",
                                               "ops/declarable/headers/datatypes.h",
@@ -98,6 +100,7 @@ import java.util.Scanner;
                                               "ops/declarable/headers/nn.h",
                                               "ops/declarable/headers/blas.h",
                                               "ops/declarable/headers/bitwise.h",
+                                              "ops/declarable/headers/tests.h",
                                               "ops/declarable/headers/loss.h",
                                               "ops/declarable/headers/datatypes.h",
                                               "ops/declarable/headers/third_party.h"},
@@ -106,11 +109,9 @@ import java.util.Scanner;
                                                 preloadpath = {"/lib64/", "/lib/", "/usr/lib64/", "/usr/lib/",
                                                                 "/usr/lib/powerpc64-linux-gnu/",
                                                                 "/usr/lib/powerpc64le-linux-gnu/"}),
-                @Platform(value = "ios", includepath = "/usr/local/Cellar/llvm/4.0.0/include/c++/v1"),
-                @Platform(value = "windows", preload = {"libiomp5md#libiomp5md", "mkl_avx#mkl_avx", "mkl_avx2#mkl_avx2",
-                                "mkl_avx512#mkl_avx512", "mkl_avx512_mic#mkl_avx512_mic", "mkl_def#mkl_def",
-                                "mkl_mc#mkl_mc", "mkl_mc3#mkl_mc3", "mkl_core#mkl_core", "mkl_intel_lp64#mkl_intel_lp64",
-                                "mkl_intel_thread#mkl_intel_thread", "mkl_rt#mkl_rt", "libnd4jcpu"}),
+                @Platform(define = "LIBND4J_ALL_OPS"),
+                @Platform(value = "macosx", preload = {"gcc_s@.1", "gomp@.1", "stdc++@.6"},
+                                preloadpath = {"/usr/local/lib/gcc/7/", "/usr/local/lib/gcc/6/", "/usr/local/lib/gcc/5/"}),
                 @Platform(extension = {"-avx512", "-avx2"}) })
 public class Nd4jCpuPresets implements InfoMapper, BuildEnabled {
 
@@ -127,12 +128,12 @@ public class Nd4jCpuPresets implements InfoMapper, BuildEnabled {
 
     @Override
     public void map(InfoMap infoMap) {
-        infoMap.put(new Info("thread_local", "ND4J_EXPORT", "INLINEDEF", "CUBLASWINAPI", "FORCEINLINE", "_CUDA_H", "_CUDA_D", "_CUDA_G", "_CUDA_HD").cppTypes().annotations())
+        infoMap.put(new Info("thread_local", "ND4J_EXPORT", "INLINEDEF", "CUBLASWINAPI", "FORCEINLINE", "_CUDA_H", "_CUDA_D", "_CUDA_G", "_CUDA_HD", "LIBND4J_ALL_OPS", "NOT_EXCLUDED").cppTypes().annotations())
                         .put(new Info("NativeOps").base("org.nd4j.nativeblas.NativeOps"))
                         .put(new Info("char").valueTypes("char").pointerTypes("@Cast(\"char*\") String",
                                         "@Cast(\"char*\") BytePointer"))
                         .put(new Info("Nd4jPointer").cast().valueTypes("Pointer").pointerTypes("PointerPointer"))
-                        .put(new Info("Nd4jIndex").cast().valueTypes("long").pointerTypes("LongPointer", "LongBuffer",
+                        .put(new Info("Nd4jLong").cast().valueTypes("long").pointerTypes("LongPointer", "LongBuffer",
                                         "long[]"))
                         .put(new Info("Nd4jStatus").cast().valueTypes("int").pointerTypes("IntPointer", "IntBuffer",
                                         "int[]"))
@@ -141,12 +142,15 @@ public class Nd4jCpuPresets implements InfoMapper, BuildEnabled {
 
         infoMap.put(new Info("__CUDACC__").define(false))
                .put(new Info("__JAVACPP_HACK__").define(true))
+               .put(new Info("LIBND4J_ALL_OPS").define(true))
                .put(new Info("MAX_UINT").translate(false))
                .put(new Info("std::initializer_list", "cnpy::NpyArray", "nd4j::NDArray::applyLambda", "nd4j::NDArray::applyPairwiseLambda",
                              "nd4j::graph::FlatResult", "nd4j::graph::FlatVariable").skip())
                .put(new Info("std::string").annotations("@StdString").valueTypes("BytePointer", "String")
                                            .pointerTypes("@Cast({\"char*\", \"std::string*\"}) BytePointer"))
                .put(new Info("std::pair<int,int>").pointerTypes("IntIntPair").define())
+               .put(new Info("std::vector<std::vector<int> >").pointerTypes("IntVectorVector").define())
+               .put(new Info("std::vector<std::vector<Nd4jLong> >").pointerTypes("LongVectorVector").define())
                .put(new Info("std::vector<nd4j::NDArray<float>*>").pointerTypes("FloatNDArrayVector").define())
                .put(new Info("std::vector<nd4j::NDArray<float16>*>").pointerTypes("HalfNDArrayVector").define())
                .put(new Info("std::vector<nd4j::NDArray<double>*>").pointerTypes("DoubleNDArrayVector").define())
@@ -191,8 +195,9 @@ public class Nd4jCpuPresets implements InfoMapper, BuildEnabled {
         ArrayList<String> opTemplates = new ArrayList<String>();
         files.add(file);
         files.addAll(Arrays.asList(new File(file.getParent(), "headers").listFiles()));
+        Collections.sort(files);
         for (File f : files) {
-            try (Scanner scanner = new Scanner(f)) {
+            try (Scanner scanner = new Scanner(f, "UTF-8")) {
                 while (scanner.hasNextLine()) {
                     String line = scanner.nextLine().trim();
                     if (line.startsWith("DECLARE_")) {

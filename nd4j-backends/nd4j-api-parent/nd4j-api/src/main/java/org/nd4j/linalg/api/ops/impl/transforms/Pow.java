@@ -19,14 +19,19 @@
 
 package org.nd4j.linalg.api.ops.impl.transforms;
 
+import lombok.val;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.BaseTransformOp;
+import org.nd4j.linalg.factory.Nd4j;
+import org.tensorflow.framework.AttrValue;
+import org.tensorflow.framework.GraphDef;
+import org.tensorflow.framework.NodeDef;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Pow function
@@ -36,24 +41,25 @@ import java.util.List;
 public class Pow extends BaseTransformOp {
     private double pow;
 
-    public Pow() {}
+    public Pow() {
+    }
 
     public Pow(SameDiff sameDiff, SDVariable i_v, boolean inPlace, double pow) {
         super(sameDiff, i_v, inPlace);
         this.pow = pow;
-        this.extraArgs = new Object[] {pow};
+        this.extraArgs = new Object[]{pow};
     }
 
-    public Pow(SameDiff sameDiff, SDVariable i_v, int[] shape, boolean inPlace, Object[] extraArgs, double pow) {
+    public Pow(SameDiff sameDiff, SDVariable i_v, long[] shape, boolean inPlace, Object[] extraArgs, double pow) {
         super(sameDiff, i_v, shape, inPlace, extraArgs);
         this.pow = pow;
-        this.extraArgs = new Object[] {pow};
+        this.extraArgs = new Object[]{pow};
     }
 
     public Pow(SameDiff sameDiff, SDVariable i_v, Object[] extraArgs, double pow) {
         super(sameDiff, i_v, extraArgs);
         this.pow = pow;
-        this.extraArgs = new Object[] {pow};
+        this.extraArgs = new Object[]{pow};
     }
 
     public Pow(INDArray x, INDArray z, double pow) {
@@ -96,9 +102,22 @@ public class Pow extends BaseTransformOp {
     @Override
     public void init(INDArray x, INDArray y, INDArray z, long n) {
         super.init(x, y, z, n);
-        this.extraArgs = new Object[] {pow};
+        this.extraArgs = new Object[]{pow};
     }
 
+    @Override
+    public void initFromTensorFlow(NodeDef nodeDef, SameDiff initWith, Map<String, AttrValue> attributesForNode, GraphDef graph) {
+        val weightsName = nodeDef.getInput(1);
+        val variable = initWith.getVariable(weightsName);
+        val tmp = initWith.getArrForVarName(weightsName);
+
+        // if second argument is scalar - we should provide array of same shape
+        if (tmp != null) {
+            if (tmp.isScalar()) {
+                this.pow = tmp.getDouble(0);
+            }
+        }
+    }
 
     @Override
     public String onnxName() {
@@ -113,8 +132,7 @@ public class Pow extends BaseTransformOp {
     @Override
     public List<SDVariable> doDiff(List<SDVariable> i_v1) {
         SDVariable g = f().powDerivative(arg(), this.pow).mul(i_v1.get(0));
-
-        return Collections.singletonList(g);
+        return Arrays.asList(g);
     }
 
 }

@@ -24,7 +24,9 @@ import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
+import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.util.ArrayUtil;
 import org.tensorflow.framework.AttrValue;
@@ -39,17 +41,35 @@ import java.util.*;
  * @author Adam Gibson
  */
 public class Tile extends DynamicCustomOp {
+
     private int[] axis;
+    private boolean is_static_reps = false;
 
     public Tile(SameDiff sameDiff, SDVariable i_v, int[] axis) {
         super(null,sameDiff, new SDVariable[]{i_v}, false);
         this.axis = axis;
-        addIArgument(axis);
+        addArguments();
     }
+
+    public Tile(INDArray[] inputs, INDArray[] outputs, int[] axis, boolean is_static_reps) {
+        super(null, inputs, outputs);
+        this.axis = axis;
+        this.is_static_reps = is_static_reps;
+        addArguments();
+    }
+
+
+    public Tile(INDArray[] inputs, INDArray[] outputs, int[] axis) {
+        this(inputs,outputs,axis,false);
+    }
+
 
     public Tile() {}
 
-
+    private void addArguments() {
+        this.is_static_reps = true;
+        addIArgument(axis);
+    }
 
     @Override
     public void initFromTensorFlow(NodeDef nodeDef, SameDiff initWith, Map<String, AttrValue> attributesForNode, GraphDef graph) {
@@ -57,10 +77,8 @@ public class Tile extends DynamicCustomOp {
         val arr = TFGraphMapper.getInstance().getNDArrayFromTensor("value",lastNode,graph);
         if(arr != null) {
             this.axis = arr.data().asInt();
-            addIArgument(axis);
+            addArguments();
         }
-
-
     }
 
 
@@ -98,27 +116,33 @@ public class Tile extends DynamicCustomOp {
     }
 
     @Override
-    public List<int[]> calculateOutputShape() {
+    public List<long[]> calculateOutputShape() {
         /**
          * This op is special case: we can't infer its shape before both inputs are available.
          * So if reps argument is full of 0.0s - we skip shape inference
          *
          * And during actual op invocation both inputs should be available due to topo sort
          */
+        if (is_static_reps)
+            return Nd4j.getExecutioner().calculateOutputShape(this);
+
         if (inputArguments().length < 2)
             return Collections.emptyList();
 
         val array = inputArguments()[1];
-        val reps = new int[array.length()];
+
+        // FIXME: int cast
+        val reps = new long[(int) array.length()];
 
         for (int e = 0; e < reps.length; e++)
             reps[e] = (int) array.getDouble(e);
 
-        if (ArrayUtil.prod(reps) == 0)
+        if (ArrayUtil.prodLong(reps) == 0)
             return Collections.emptyList();
         else
             return Nd4j.getExecutioner().calculateOutputShape(this);
     }
+
 
     @Override
     public String opName() {

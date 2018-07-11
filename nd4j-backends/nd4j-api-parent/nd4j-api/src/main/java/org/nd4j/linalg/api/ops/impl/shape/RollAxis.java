@@ -25,10 +25,7 @@ import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.ShapeOp;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Transpose function
@@ -53,7 +50,8 @@ public class RollAxis extends ShapeOp {
         this.axis = axis;
     }
 
-    public RollAxis() {}
+    public RollAxis() {
+    }
 
     public RollAxis(INDArray x, INDArray z) {
         super(x, z);
@@ -74,8 +72,8 @@ public class RollAxis extends ShapeOp {
 
     @Override
     public Map<String, Object> propertiesForFunction() {
-        Map<String,Object> ret = new LinkedHashMap<>();
-        ret.put("axis",axis);
+        Map<String, Object> ret = new LinkedHashMap<>();
+        ret.put("axis", axis);
         return ret;
     }
 
@@ -92,13 +90,28 @@ public class RollAxis extends ShapeOp {
 
     @Override
     public void exec() {
-        if(x != z) {
+        if (x != z) {
             z.assign(x.transpose());
-        }
-        else {
+        } else {
             this.z = x.transpose();
         }
 
+    }
+
+    @Override
+    public List<long[]> calculateOutputShape() {
+        List<long[]> ret = new ArrayList<>();
+        long[] inputShape = arg().getShape();
+        long[] outputShape = new long[inputShape.length];
+        outputShape[0] = inputShape[axis];
+        for(int i = 1; i <=axis; ++i) {
+            outputShape[i] = inputShape[i - 1];
+        }
+        for(int i = axis + 1; i < inputShape.length; ++i) {
+            outputShape[i] = inputShape[i];
+        }
+        ret.add(outputShape);
+        return ret;
     }
 
     @Override
@@ -112,10 +125,9 @@ public class RollAxis extends ShapeOp {
     }
 
 
-
     @Override
     public String onnxName() {
-       throw new NoOpNameFoundException("No onnx opName found for " + opName());
+        throw new NoOpNameFoundException("No onnx opName found for " + opName());
     }
 
     @Override
@@ -130,13 +142,10 @@ public class RollAxis extends ShapeOp {
     }
 
 
-
-
     @Override
     public List<SDVariable> doDiff(List<SDVariable> i_v) {
         SDVariable ret = outputVariables()[0];
-
-        return Collections.singletonList(ret);
+        return Arrays.asList(ret);
     }
 
 }

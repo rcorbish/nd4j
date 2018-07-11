@@ -683,7 +683,7 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
 
     @Test
     public void testAllocation6() throws Exception {
-        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().createNewWorkspace(basicConfig);
+        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getAndActivateWorkspace(basicConfig, "testAllocation6");
 
         Nd4j.getMemoryManager().setCurrentWorkspace(workspace);
 
@@ -701,11 +701,13 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         assertEquals(2000 * Nd4j.sizeOfDataType(), workspace.getHostOffset());
 
         //assertEquals(5, dup.sumNumber().doubleValue(), 0.01);
+
+        workspace.close();
     }
 
     @Test
     public void testAllocation5() throws Exception {
-        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().createNewWorkspace(basicConfig);
+        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getAndActivateWorkspace(basicConfig, "testAllocation5");
 
         Nd4j.getMemoryManager().setCurrentWorkspace(workspace);
 
@@ -726,6 +728,8 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         assertEquals((reqMemory + reqMemory % 8) * 2, workspace.getHostOffset());
 
         assertEquals(5, dup.sumNumber().doubleValue(), 0.01);
+
+        workspace.close();
     }
 
 
@@ -767,8 +771,8 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
 
     @Test
     public void testAllocation3() throws Exception {
-        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig,
-                        MemoryWorkspace.DEFAULT_ID);
+        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getAndActivateWorkspace(basicConfig,
+                        "testAllocation2");
 
         Nd4j.getMemoryManager().setCurrentWorkspace(workspace);
 
@@ -785,12 +789,14 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         array.assign(1.0f);
 
         assertEquals(5, array.sumNumber().doubleValue(), 0.01);
+
+        workspace.close();
     }
 
     @Test
     public void testAllocation2() throws Exception {
-        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig,
-                        MemoryWorkspace.DEFAULT_ID);
+        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getAndActivateWorkspace(basicConfig,
+                        "testAllocation2");
 
         Nd4j.getMemoryManager().setCurrentWorkspace(workspace);
 
@@ -807,18 +813,25 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         array.assign(1.0f);
 
         assertEquals(5, array.sumNumber().doubleValue(), 0.01);
+
+        workspace.close();
     }
 
     @Test
     public void testAllocation1() throws Exception {
-        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig,
-                        MemoryWorkspace.DEFAULT_ID);
+
+
 
         INDArray exp = Nd4j.create(new float[] {1f, 2f, 3f, 4f, 5f});
+
+        Nd4jWorkspace workspace = (Nd4jWorkspace) Nd4j.getWorkspaceManager().getAndActivateWorkspace(basicConfig,
+                "TestAllocation1");
 
         Nd4j.getMemoryManager().setCurrentWorkspace(workspace);
 
         assertNotEquals(null, Nd4j.getMemoryManager().getCurrentWorkspace());
+
+        assertEquals(0, workspace.getHostOffset());
 
         INDArray array = Nd4j.create(new float[] {1f, 2f, 3f, 4f, 5f});
 
@@ -871,6 +884,8 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         assertEquals(6.0, array.getFloat(2), 0.01);
         assertEquals(6.0, array.getFloat(3), 0.01);
         assertEquals(6.0, array.getFloat(4), 0.01);
+
+        workspace.close();
     }
 
 
@@ -927,6 +942,218 @@ public class BasicWorkspaceTests extends BaseNd4jTest {
         assertEquals(1000f, mArray.sumNumber().floatValue(), 1e-5);
 
         ws.notifyScopeLeft();
+    }
+
+
+    @Test
+    public void testInvalidLeverageMigrateDetach(){
+
+        try {
+            MemoryWorkspace ws = Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig, "testInvalidLeverage");
+
+            INDArray invalidArray = null;
+
+            for (int i = 0; i < 10; i++) {
+                try (MemoryWorkspace ws2 = ws.notifyScopeEntered()) {
+                    invalidArray = Nd4j.linspace(1, 10, 10);
+                }
+            }
+            assertTrue(invalidArray.isAttached());
+
+            MemoryWorkspace ws2 = Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig, "testInvalidLeverage2");
+
+            //Leverage
+            try (MemoryWorkspace ws3 = ws2.notifyScopeEntered()) {
+                invalidArray.leverage();
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+            try (MemoryWorkspace ws3 = ws2.notifyScopeEntered()) {
+                invalidArray.leverageTo("testInvalidLeverage2");
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+            try (MemoryWorkspace ws3 = ws2.notifyScopeEntered()) {
+                invalidArray.leverageOrDetach("testInvalidLeverage2");
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+            try {
+                invalidArray.leverageTo("testInvalidLeverage2");
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+            //Detach
+            try{
+                invalidArray.detach();
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e){
+                e.printStackTrace();
+            }
+
+
+            //Migrate
+            try (MemoryWorkspace ws3 = ws2.notifyScopeEntered()) {
+                invalidArray.migrate();
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+            try {
+                invalidArray.migrate(true);
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e) {
+                //Expected exception
+                e.printStackTrace();
+            }
+
+
+            //Dup
+            try{
+                invalidArray.dup();
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e){
+                e.printStackTrace();
+            }
+
+            //Unsafe dup:
+            try{
+                invalidArray.unsafeDuplication();
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e){
+                e.printStackTrace();
+            }
+
+            try{
+                invalidArray.unsafeDuplication(true);
+                fail("Exception should be thrown");
+            } catch (ND4JWorkspaceException e){
+                e.printStackTrace();
+            }
+
+
+        } finally {
+            Nd4j.getWorkspaceManager().destroyAllWorkspacesForCurrentThread();
+        }
+    }
+
+    @Test
+    public void testBadGenerationLeverageMigrateDetach(){
+        INDArray gen2 = null;
+
+        for (int i = 0; i < 4; i++) {
+            MemoryWorkspace wsOuter = Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig, "testBadGeneration");
+
+            try (MemoryWorkspace wsOuter2 = wsOuter.notifyScopeEntered()) {
+                INDArray arr = Nd4j.linspace(1, 10, 10);
+                if (i == 2) {
+                    gen2 = arr;
+                }
+
+                if (i == 3) {
+                    MemoryWorkspace wsInner = Nd4j.getWorkspaceManager().getWorkspaceForCurrentThread(basicConfig, "testBadGeneration2");
+                    try (MemoryWorkspace wsInner2 = wsInner.notifyScopeEntered()) {
+
+                        //Leverage
+                        try {
+                            gen2.leverage();
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            gen2.leverageTo("testBadGeneration2");
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            gen2.leverageOrDetach("testBadGeneration2");
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            gen2.leverageTo("testBadGeneration2");
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+                        //Detach
+                        try {
+                            gen2.detach();
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            e.printStackTrace();
+                        }
+
+
+                        //Migrate
+                        try {
+                            gen2.migrate();
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            gen2.migrate(true);
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            //Expected exception
+                            e.printStackTrace();
+                        }
+
+
+                        //Dup
+                        try {
+                            gen2.dup();
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            e.printStackTrace();
+                        }
+
+                        //Unsafe dup:
+                        try {
+                            gen2.unsafeDuplication();
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            gen2.unsafeDuplication(true);
+                            fail("Exception should be thrown");
+                        } catch (ND4JWorkspaceException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        }
     }
 
 

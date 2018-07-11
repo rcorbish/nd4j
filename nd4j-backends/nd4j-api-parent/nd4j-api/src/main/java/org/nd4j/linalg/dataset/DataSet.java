@@ -22,6 +22,7 @@ package org.nd4j.linalg.dataset;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.DataSetUtil;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -266,7 +267,7 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
 
             dis.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error loading DataSet",e);
         }
     }
 
@@ -357,7 +358,7 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
         Map<Integer, Double> ret = new HashMap<>();
         if (labels == null)
             return ret;
-        int nTensors = labels.tensorssAlongDimension(1);
+        long nTensors = labels.tensorssAlongDimension(1);
         for (int i = 0; i < nTensors; i++) {
             INDArray row = labels.tensorAlongDimension(i, 1);
             INDArray javaRow = labels.javaTensorAlongDimension(i, 1);
@@ -405,7 +406,7 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
      */
     @Override
     public DataSet reshape(int rows, int cols) {
-        DataSet ret = new DataSet(getFeatures().reshape(new int[] {rows, cols}), getLabels());
+        DataSet ret = new DataSet(getFeatures().reshape(new long[] {rows, cols}), getLabels());
         return ret;
     }
 
@@ -578,7 +579,8 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
      */
     @Override
     public int numInputs() {
-        return getFeatures().size(1);
+        // FIXME: int cast
+        return (int) getFeatures().size(1);
     }
 
     @Override
@@ -637,7 +639,7 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
         if (getFeatureMatrix().rank() == 4) {
             //ensure rank is preserved
             INDArray slice = getFeatureMatrix().slice(i);
-            return new DataSet(slice.reshape(ArrayUtil.combine(new int[] {1}, slice.shape())), getLabels().slice(i));
+            return new DataSet(slice.reshape(ArrayUtil.combine(new long[] {1}, slice.shape())), getLabels().slice(i));
         }
         return new DataSet(getFeatures().slice(i), getLabels().slice(i));
     }
@@ -1149,15 +1151,17 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
 
     @Override
     public int numOutcomes() {
-        return getLabels().size(1);
+        // FIXME: int cast
+        return (int) getLabels().size(1);
     }
 
     @Override
     public int numExamples() {
+        // FIXME: int cast
         if (getFeatureMatrix() != null)
-            return getFeatureMatrix().size(0);
+            return (int) getFeatureMatrix().size(0);
         else if (getLabels() != null)
-            return getLabels().size(0);
+            return (int) getLabels().size(0);
         return 0;
     }
 
@@ -1245,11 +1249,13 @@ public class DataSet implements org.nd4j.linalg.dataset.api.DataSet {
     }
 
     @Override
-    public SplitTestAndTrain splitTestAndTrain(double percentTrain) {
-        int numPercent = (int) (percentTrain * numExamples());
-        if (numPercent <= 0)
-            numPercent = 1;
-        return splitTestAndTrain(numPercent);
+    public SplitTestAndTrain splitTestAndTrain(double fractionTrain) {
+        Preconditions.checkArgument(fractionTrain > 0.0 && fractionTrain < 1.0,
+                "Train fraction must be > 0.0 and < 1.0 - got %s", fractionTrain);
+        int numTrain = (int) (fractionTrain * numExamples());
+        if (numTrain <= 0)
+            numTrain = 1;
+        return splitTestAndTrain(numTrain);
     }
 
 

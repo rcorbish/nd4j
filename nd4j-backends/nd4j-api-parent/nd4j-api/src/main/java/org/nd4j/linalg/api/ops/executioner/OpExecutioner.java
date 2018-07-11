@@ -45,7 +45,15 @@ public interface OpExecutioner {
     }
 
     enum ProfilingMode {
-        DISABLED, NAN_PANIC, INF_PANIC, ANY_PANIC, OPERATIONS, METHODS, ALL, SCOPE_PANIC
+        DISABLED,
+        NAN_PANIC,
+        INF_PANIC,
+        ANY_PANIC,
+        OPERATIONS,
+        METHODS,
+        ALL,
+        SCOPE_PANIC,
+        BANDWIDTH,
     }
 
     /**
@@ -351,7 +359,7 @@ public interface OpExecutioner {
      */
     void exec(CustomOp op);
 
-    List<int[]> calculateOutputShape(CustomOp op);
+    List<long[]> calculateOutputShape(CustomOp op);
 
 
     void enableDebugMode(boolean reallyEnable);

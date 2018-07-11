@@ -5,7 +5,7 @@ import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 
 public class Reverse extends DynamicCustomOp {
@@ -31,14 +31,19 @@ public class Reverse extends DynamicCustomOp {
 
     @Override
     public String tensorflowName() {
-        throw new NoOpNameFoundException("Reverse");
+        return "Reverse";
+    }
+
+    @Override
+    public String[] tensorflowNames() {
+        return new String[] {"Reverse","ReverseV2"};
     }
 
 
     @Override
     public List<SDVariable> doDiff(List<SDVariable> f1) {
         SDVariable ret = f().reverse(f1.get(0), dimensions);
-        return Collections.singletonList(ret);
+        return Arrays.asList(ret);
     }
 
 }

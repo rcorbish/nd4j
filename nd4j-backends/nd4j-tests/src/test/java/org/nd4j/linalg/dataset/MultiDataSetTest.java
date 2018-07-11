@@ -1,5 +1,6 @@
 package org.nd4j.linalg.dataset;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -20,6 +21,7 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
+@Slf4j
 @RunWith(Parameterized.class)
 public class MultiDataSetTest extends BaseNd4jTest {
     public MultiDataSetTest(Nd4jBackend backend) {
@@ -507,9 +509,9 @@ public class MultiDataSetTest extends BaseNd4jTest {
             assertEquals(3, m.getFeatures(1).rank());
             assertEquals(4, m.getFeatures(2).rank());
 
-            assertArrayEquals(new int[] {1, 10}, m.getFeatures(0).shape());
-            assertArrayEquals(new int[] {1, 10, 10}, m.getFeatures(1).shape());
-            assertArrayEquals(new int[] {1, 5, 10, 10}, m.getFeatures(2).shape());
+            assertArrayEquals(new long[] {1, 10}, m.getFeatures(0).shape());
+            assertArrayEquals(new long[] {1, 10, 10}, m.getFeatures(1).shape());
+            assertArrayEquals(new long[] {1, 5, 10, 10}, m.getFeatures(2).shape());
 
             assertEquals(features[0].get(NDArrayIndex.point(i), NDArrayIndex.all()), m.getFeatures(0));
             assertEquals(features[1].get(NDArrayIndex.interval(i, i, true), NDArrayIndex.all(), NDArrayIndex.all()),
@@ -521,9 +523,9 @@ public class MultiDataSetTest extends BaseNd4jTest {
             assertEquals(3, m.getLabels(1).rank());
             assertEquals(4, m.getLabels(2).rank());
 
-            assertArrayEquals(new int[] {1, 10}, m.getLabels(0).shape());
-            assertArrayEquals(new int[] {1, 10, 10}, m.getLabels(1).shape());
-            assertArrayEquals(new int[] {1, 5, 10, 10}, m.getLabels(2).shape());
+            assertArrayEquals(new long[] {1, 10}, m.getLabels(0).shape());
+            assertArrayEquals(new long[] {1, 10, 10}, m.getLabels(1).shape());
+            assertArrayEquals(new long[] {1, 5, 10, 10}, m.getLabels(2).shape());
 
             assertEquals(labels[0].get(NDArrayIndex.point(i), NDArrayIndex.all()), m.getLabels(0));
             assertEquals(labels[1].get(NDArrayIndex.interval(i, i, true), NDArrayIndex.all(), NDArrayIndex.all()),
@@ -676,8 +678,7 @@ public class MultiDataSetTest extends BaseNd4jTest {
                 MultiDataSet mds2 = new MultiDataSet();
                 mds2.load(dis);
 
-
-                assertEquals(mds, mds2);
+                assertEquals("Failed at [" + numF + "]/[" + numL + "]",mds, mds2);
             }
         }
     }

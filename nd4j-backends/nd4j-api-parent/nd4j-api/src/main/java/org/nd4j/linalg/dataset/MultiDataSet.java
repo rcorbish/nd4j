@@ -258,7 +258,7 @@ public class MultiDataSet implements org.nd4j.linalg.dataset.api.MultiDataSet {
             result = new INDArray[numArrays];
             for (int i = 0; i < numArrays; i++) {
                 INDArray arr = Nd4j.read(dis);
-                result[i] = isMask && arr.equals(EMPTY_MASK_ARRAY_PLACEHOLDER) ? null : arr;
+                result[i] = isMask && arr.equals(EMPTY_MASK_ARRAY_PLACEHOLDER.get()) ? null : arr;
             }
         }
         return result;
@@ -271,7 +271,7 @@ public class MultiDataSet implements org.nd4j.linalg.dataset.api.MultiDataSet {
 
     @Override
     public List<org.nd4j.linalg.dataset.api.MultiDataSet> asList() {
-        int nExamples = features[0].size(0);
+        long nExamples = features[0].size(0);
 
         List<org.nd4j.linalg.dataset.api.MultiDataSet> list = new ArrayList<>();
 

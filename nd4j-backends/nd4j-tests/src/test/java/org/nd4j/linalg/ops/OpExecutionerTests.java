@@ -20,6 +20,8 @@
 
 package org.nd4j.linalg.ops;
 
+import lombok.val;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -109,6 +111,7 @@ public class OpExecutionerTests extends BaseNd4jTest {
 
 
     @Test
+    @Ignore
     public void testDistance() throws Exception {
         INDArray matrix = Nd4j.rand(new int[] {400,10});
         INDArray rowVector = matrix.getRow(70);
@@ -274,7 +277,9 @@ public class OpExecutionerTests extends BaseNd4jTest {
     public void testIamax2() {
         INDArray linspace = Nd4j.linspace(1, 4, 4);
         assertEquals(getFailureMessage(), 3, Nd4j.getBlasWrapper().iamax(linspace));
-        int iamax = Nd4j.getExecutioner().execAndReturn(new IAMax(linspace)).getFinalResult();
+        val op = new IAMax(linspace);
+
+        int iamax = Nd4j.getExecutioner().execAndReturn(op).getFinalResult();
         assertEquals(3, iamax);
     }
 
@@ -534,7 +539,8 @@ public class OpExecutionerTests extends BaseNd4jTest {
         OpExecutioner opExecutioner = Nd4j.getExecutioner();
         INDArray arr = Nd4j.linspace(1, 6, 6).reshape(2, 3);
         INDArray slice = arr.slice(0);
-        float[] expected = new float[slice.length()];
+        // FIXME: int cast
+        float[] expected = new float[(int) slice.length()];
         for (int i = 0; i < slice.length(); i++)
             expected[i] = (float) Math.exp(slice.getDouble(i));
         Exp exp = new Exp(slice);
@@ -663,7 +669,8 @@ public class OpExecutionerTests extends BaseNd4jTest {
         double stdev = arr.stdNumber(true).doubleValue();
 
 
-        double exp = 0.370035856962204;
+        val standardDeviation = new org.apache.commons.math3.stat.descriptive.moment.StandardDeviation(true);
+        double exp = standardDeviation.evaluate(arr.toDoubleVector());
         assertEquals(exp, stdev, 1e-7f);
 
 
@@ -673,14 +680,16 @@ public class OpExecutionerTests extends BaseNd4jTest {
 
     @Test
     public void testVariance() {
-        INDArray arr = Nd4j.create(new float[] {0.9296161f, 0.31637555f, 0.1839188f}, new int[] {1, 3}, ordering());
+        val f = new double[] {0.9296161, 0.31637555, 0.1839188};
+        INDArray arr = Nd4j.create(f, new int[] {1, 3}, ordering());
         double var = arr.varNumber().doubleValue();
 
         INDArray var1 = arr.var(1);
         double var2 = var1.getDouble(0);
         assertEquals(var, var2, 1e-3);
 
-        double exp = 0.136926531791687;
+        val variance = new org.apache.commons.math3.stat.descriptive.moment.Variance(true);
+        double exp = variance.evaluate(arr.toDoubleVector());
         assertEquals(exp, var, 1e-7f);
     }
 

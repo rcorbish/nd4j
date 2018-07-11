@@ -11,7 +11,7 @@ import org.bytedeco.javacpp.IntPointer;
 
 import org.nd4j.linalg.api.blas.BlasException ;
 
-import static org.bytedeco.javacpp.mkl_rt.*;
+import static org.bytedeco.javacpp.openblas.*;
 
 /**
  * CPU lapack implementation
@@ -22,7 +22,8 @@ public class CpuLapack extends BaseLapack {
     }
 
     protected static int getLda(INDArray A) {
-        return A.ordering() == 'f' ? A.rows() : A.columns();
+        // FIXME: int cast
+        return A.ordering() == 'f' ? (int) A.rows() : (int) A.columns();
     }
 //=========================    
 // L U DECOMP

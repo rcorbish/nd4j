@@ -105,6 +105,11 @@ public abstract class BaseAccumulation extends BaseOp implements Accumulation {
     }
 
 
+    public BaseAccumulation(SameDiff sameDiff,
+                            SDVariable i_v) {
+        this(sameDiff, i_v, null, false);
+    }
+
 
     public BaseAccumulation(SameDiff sameDiff,
                             SDVariable i_v,
@@ -185,7 +190,7 @@ public abstract class BaseAccumulation extends BaseOp implements Accumulation {
     }
 
     @Override
-    public List<int[]> calculateOutputShape() {
+    public List<long[]> calculateOutputShape() {
         if(args().length < 1) {
             throw new ND4JIllegalStateException("Unable to compute input shape. No arguments found.");
         }
@@ -193,7 +198,7 @@ public abstract class BaseAccumulation extends BaseOp implements Accumulation {
         if(arg().getShape() == null)
             return Collections.emptyList();
 
-        List<int[]> ret = new ArrayList<>(1);
+        List<long[]> ret = new ArrayList<>(1);
         val reducedShape = Shape.getReducedShape(arg().getShape(),dimensions, isKeepDims(), newFormat);
         ret.add(reducedShape);
         return ret;
@@ -211,13 +216,13 @@ public abstract class BaseAccumulation extends BaseOp implements Accumulation {
             for(int i = 0; i < graph.getNodeCount(); i++) {
                 if (graph.getNode(i).getName().equals(nodeDef.getName() + "/reduction_indices")) {
                     reductionNode = graph.getNode(i);
-                    val arr = TFGraphMapper.getInstance().getNDArrayFromTensor("value", graph.getNode(i), graph);
+                    val arr = TFGraphMapper.getInstance().getNDArrayFromTensor("value", reductionNode, graph);
 
                     boolean keepAxis = nodeDef.getAttrOrThrow("keep_dims").getB();
 
                     // keepAxis = false by default
-                    int[] dimensions = ArrayUtils.add(arr.data().asInt(), 0, keepAxis ? 1 : 0);
-
+                    //int[] dimensions = ArrayUtils.add(arr.data().asInt(), 0, keepAxis ? 1 : 0);
+                    int[] dimensions = arr.data().asInt();
 
                     this.dimensions = dimensions;
                     break;

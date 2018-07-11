@@ -66,6 +66,7 @@ import org.bytedeco.javacpp.tools.InfoMapper;
                         "ops/declarable/OpRegistrator.h",
                         "ops/declarable/CustomOperations.h"}, compiler = {"cpp11", "nowarnings"},
                                 library = "jnind4jcuda", link = "nd4jcuda", preload = "libnd4jcuda"),
+                                @Platform(define = "LIBND4J_ALL_OPS"),
                                 @Platform(value = "linux", preload = "gomp@.1",
                                                 preloadpath = {"/lib64/", "/lib/", "/usr/lib64/", "/usr/lib/",
                                                                 "/usr/lib/powerpc64-linux-gnu/",
@@ -73,12 +74,12 @@ import org.bytedeco.javacpp.tools.InfoMapper;
 public class Nd4jCudaPresets implements InfoMapper {
     @Override
     public void map(InfoMap infoMap) {
-        infoMap.put(new Info("thread_local", "ND4J_EXPORT", "INLINEDEF", "CUBLASWINAPI", "FORCEINLINE", "_CUDA_H", "_CUDA_D", "_CUDA_G", "_CUDA_HD").cppTypes().annotations())
+        infoMap.put(new Info("thread_local", "ND4J_EXPORT", "INLINEDEF", "CUBLASWINAPI", "FORCEINLINE", "_CUDA_H", "_CUDA_D", "_CUDA_G", "_CUDA_HD", "LIBND4J_ALL_OPS", "NOT_EXCLUDED").cppTypes().annotations())
                 .put(new Info("NativeOps").base("org.nd4j.nativeblas.NativeOps"))
                 .put(new Info("char").valueTypes("char").pointerTypes("@Cast(\"char*\") String",
                         "@Cast(\"char*\") BytePointer"))
                 .put(new Info("Nd4jPointer").cast().valueTypes("Pointer").pointerTypes("PointerPointer"))
-                .put(new Info("Nd4jIndex").cast().valueTypes("long").pointerTypes("LongPointer", "LongBuffer",
+                .put(new Info("Nd4jLong").cast().valueTypes("long").pointerTypes("LongPointer", "LongBuffer",
                         "long[]"))
                 .put(new Info("Nd4jStatus").cast().valueTypes("int").pointerTypes("IntPointer", "IntBuffer",
                         "int[]"))
@@ -86,17 +87,20 @@ public class Nd4jCudaPresets implements InfoMapper {
                         "short[]"));
 
         infoMap.put(new Info("__CUDACC__").define(false))
-                .put(new Info("__JAVACPP_HACK__").define(true))
+               .put(new Info("__JAVACPP_HACK__").define(true))
+               .put(new Info("LIBND4J_ALL_OPS").define(true))
                 .put(new Info("MAX_UINT").translate(false))
-                .put(new Info("std::initializer_list", "cnpy::NpyArray", "nd4j::NDArray::applyLambda", "nd4j::NDArray::applyPairwiseLambda",
-                        "nd4j::graph::FlatResult", "nd4j::graph::FlatVariable").skip())
-                .put(new Info("std::string").annotations("@StdString").valueTypes("BytePointer", "String")
-                        .pointerTypes("@Cast({\"char*\", \"std::string*\"}) BytePointer"))
-                .put(new Info("std::pair<int,int>").pointerTypes("IntIntPair").define())
-                .put(new Info("std::vector<nd4j::NDArray<float>*>").pointerTypes("FloatNDArrayVector").define())
-                .put(new Info("std::vector<nd4j::NDArray<float16>*>").pointerTypes("HalfNDArrayVector").define())
-                .put(new Info("std::vector<nd4j::NDArray<double>*>").pointerTypes("DoubleNDArrayVector").define())
-                .put(new Info("nd4j::IndicesList").purify());
+               .put(new Info("std::initializer_list", "cnpy::NpyArray", "nd4j::NDArray::applyLambda", "nd4j::NDArray::applyPairwiseLambda",
+                             "nd4j::graph::FlatResult", "nd4j::graph::FlatVariable").skip())
+               .put(new Info("std::string").annotations("@StdString").valueTypes("BytePointer", "String")
+                                           .pointerTypes("@Cast({\"char*\", \"std::string*\"}) BytePointer"))
+               .put(new Info("std::pair<int,int>").pointerTypes("IntIntPair").define())
+               .put(new Info("std::vector<std::vector<int> >").pointerTypes("IntVectorVector").define())
+                .put(new Info("std::vector<std::vector<Nd4jLong> >").pointerTypes("LongVectorVector").define())
+               .put(new Info("std::vector<nd4j::NDArray<float>*>").pointerTypes("FloatNDArrayVector").define())
+               .put(new Info("std::vector<nd4j::NDArray<float16>*>").pointerTypes("HalfNDArrayVector").define())
+               .put(new Info("std::vector<nd4j::NDArray<double>*>").pointerTypes("DoubleNDArrayVector").define())
+               .put(new Info("nd4j::IndicesList").purify());
 
         String classTemplates[] = {
                 "nd4j::NDArray",

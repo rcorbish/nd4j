@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.junit.After;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.autodiff.execution.NativeGraphExecutioner;
@@ -16,10 +17,12 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.OpExecutioner;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
+import org.nd4j.nativeblas.NativeOpsHolder;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternResolver;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -49,6 +52,12 @@ public class TFGraphTestAllHelper {
         public String getDefaultBaseDir() {
             return BASE_DIR;
         }
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        NativeOpsHolder.getInstance().getDeviceNativeOps().enableDebugMode(false);
+        NativeOpsHolder.getInstance().getDeviceNativeOps().enableVerboseMode(false);
     }
 
     //TODO: Later, we can add this as a param so we can test different graphs in samediff and not samediff
@@ -172,14 +181,14 @@ public class TFGraphTestAllHelper {
             Nd4j.getExecutioner().enableDebugMode(true);
             Nd4j.getExecutioner().enableVerboseMode(true);
 
-            val string = graph.asFlatPrint();
-            log.info("Graph structure: \n{}", string);
-            val executioner = new NativeGraphExecutioner();
-            val results = executioner.executeGraph(graph, configuration);
+//            val string = graph.asFlatPrint();
+//            log.info("Graph structure: \n{}", string);
+            //val executioner = new NativeGraphExecutioner();
+            //val results = executioner.executeGraph(graph, configuration);
 
             //assertTrue(results.length > 0); //FIXME: Later
 
-            //graph.asFlatFile(new File("../../../libnd4j/tests_cpu/resources/conv_0.fb"));
+            graph.asFlatFile(new File("../../../libnd4j/tests_cpu/resources/conv_0.fb"));
         } else if (executeWith.equals(ExecuteWith.JUST_PRINT)) {
             for (String input : inputs.keySet()) {
                 graph.associateArrayWithVariable(inputs.get(input), graph.variableMap().get(input));
@@ -253,6 +262,7 @@ public class TFGraphTestAllHelper {
         String modelDir = base_dir + "/" + modelName;
         ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver(new ClassPathResource(modelDir).getClassLoader());
         Resource[] resources = resolver.getResources("classpath*:" + modelDir + "/" + pattern + ".shape");
+        val dtype = Nd4j.dataType();
         for (int i = 0; i < resources.length; i++) {
             String fileName = resources[i].getFilename();
             String varPath = modelDir + "/" + fileName;

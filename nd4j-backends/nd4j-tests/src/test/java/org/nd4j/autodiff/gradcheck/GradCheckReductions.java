@@ -1,16 +1,22 @@
 package org.nd4j.autodiff.gradcheck;
 
 import lombok.extern.slf4j.Slf4j;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.nd4j.autodiff.functions.DifferentialFunctionFactory;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.linalg.BaseNd4jTest;
 import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.checkutil.NDArrayCreationUtil;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.factory.Nd4jBackend;
 import org.nd4j.linalg.indexing.BooleanIndexing;
 import org.nd4j.linalg.indexing.conditions.Conditions;
 import org.nd4j.linalg.ops.transforms.Transforms;
@@ -24,11 +30,67 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 @Slf4j
-public class GradCheckReductions {
+@RunWith(Parameterized.class)
+public class GradCheckReductions extends BaseNd4jTest {
 
-    static {
+    private DataBuffer.Type initialType;
+
+    public GradCheckReductions(Nd4jBackend backend) {
+        super(backend);
+    }
+
+
+    @Override
+    public char ordering() {
+        return 'c';
+    }
+
+    @Before
+    public void before() throws Exception {
         Nd4j.create(1);
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
+        initialType = Nd4j.dataType();
+
+        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.getRandom().setSeed(123);
+    }
+
+    @After
+    public void after() throws Exception {
+        Nd4j.setDataType(initialType);
+    }
+
+    @Test
+    public void testZeroCount() {
+        SameDiff sd = SameDiff.create();
+
+        INDArray ia = Nd4j.create(new int[]{2, 2}, new float[] {0, 1, 0, 1});
+        SDVariable input = sd.var("in", new int[]{2, 2});
+        sd.associateArrayWithVariable(ia, input);
+
+        SDVariable nonZero = sd.countNonZero(input);
+        SDVariable zero = sd.countZero(input);
+
+        sd.exec();
+
+        assert nonZero.getArr().getDouble(0) == 2;
+        assert zero.getArr().getDouble(0) == 2;
+
+    }
+
+    @Test
+    public void testZeroFraction() {
+        SameDiff sd = SameDiff.create();
+
+        INDArray ia = Nd4j.create(new int[]{2, 2}, new float[] {0, 1, 0, 1});
+        SDVariable input = sd.var("in", new int[]{2, 2});
+        sd.associateArrayWithVariable(ia, input);
+
+        SDVariable zeroFraction = sd.zeroFraction(input);
+
+        sd.exec();
+
+        assert zeroFraction.getArr().getDouble(0) == 0.5;
+
     }
 
     @Test
@@ -36,9 +98,11 @@ public class GradCheckReductions {
         //Test reductions: final and only function
         Nd4j.getRandom().setSeed(12345);
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 12; i++) {
 
             SameDiff sd = SameDiff.create();
+
+            boolean skipBackward = false;
 
             int nOut = 4;
             int minibatch = 10;
@@ -87,6 +151,16 @@ public class GradCheckReductions {
                     loss = sd.normmax("loss", input);
                     name = "normmax";
                     break;
+                case 10:
+                    loss = sd.countNonZero("loss", input);
+                    name = "countNonZero";
+                    skipBackward = true;
+                    break;
+                case 11:
+                    loss = sd.countZero("loss", input);
+                    name = "countZero";
+                    skipBackward = true;
+                    break;
                 default:
                     throw new RuntimeException();
             }
@@ -98,9 +172,10 @@ public class GradCheckReductions {
             INDArray inputArr = Nd4j.randn(minibatch, nOut).muli(100);
             sd.associateArrayWithVariable(inputArr, input);
 
-            boolean ok = GradCheckUtil.checkGradients(sd);
-
-            assertTrue(msg, ok);
+            if (!skipBackward) {
+                boolean ok = GradCheckUtil.checkGradients(sd);
+                assertTrue(msg, ok);
+            }
         }
     }
 
@@ -406,15 +481,18 @@ public class GradCheckReductions {
 
                 sd.execAndEndResult();
 
-                try {
+                // FIXME: we can't swallow exceptions here now, but once release out and stuff stabilized - we can
+                //try {
                     boolean ok = GradCheckUtil.checkGradients(sd, 1e-5, 1e-5, 1e-4, true, false);
                     if (!ok) {
                         allFailed.add(msg);
                     }
+                /*
                 } catch (Exception e) {
                     e.printStackTrace();
                     allFailed.add(msg + " - EXCEPTION");
                 }
+                */
             }
         }
 
